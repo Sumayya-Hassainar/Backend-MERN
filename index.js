@@ -13,7 +13,7 @@ const app = express();
 
 app.use(
   cors({
-    origin:"https://frontend-mern-4vwo.vercel.app/",
+    origin:"https://frontend-mern-last.onrender.com",
     credentials: true,
     method:['get','post','delete','put','option'],
   })
