@@ -53,7 +53,7 @@ const registerUser = async (req, res) => {
   }
 };
 
-// Login User
+// Login User (includes FIXED ADMIN login)
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -64,6 +64,35 @@ const loginUser = async (req, res) => {
         .json({ message: "Please provide email & password" });
     }
 
+    // 1) Fixed admin login via .env
+    if (
+      process.env.ADMIN_EMAIL &&
+      process.env.ADMIN_PASSWORD &&
+      email === process.env.ADMIN_EMAIL &&
+      password === process.env.ADMIN_PASSWORD
+    ) {
+      // fake admin user payload (no DB record needed)
+      const adminPayload = {
+        _id: "fixed-admin-id",
+        name: process.env.ADMIN_NAME || "Admin",
+        email: process.env.ADMIN_EMAIL,
+        role: "admin",
+      };
+
+      const token = generateToken(adminPayload._id, adminPayload.role);
+
+      return res.json({
+        _id: adminPayload._id,
+        name: adminPayload.name,
+        email: adminPayload.email,
+        role: adminPayload.role,
+        isVendorApproved: true, // not relevant, but keep consistent
+        token,
+        message: "Admin login successful",
+      });
+    }
+
+    // 2) Normal DB user login
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: "User not found" });
 

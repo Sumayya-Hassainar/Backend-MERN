@@ -13,7 +13,7 @@ const app = express();
 
 app.use(
   cors({
-    origin:"https://frontend-mern-last.onrender.com",
+    origin:"http://localhost:5174",
     credentials: true,
   
   })
