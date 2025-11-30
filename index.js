@@ -4,13 +4,14 @@ const dotenv = require("dotenv");
 const path = require("path");
 const connectDB = require("./config/db");
 const Routes = require("./routes/indexRoutes");
+const cookieParser = require("cookie-parser");
 
 dotenv.config(); // ✅ MUST be at the very top before using process.env
 
 const app = express();
 
 // ===== CORS CONFIG =====
-
+app.use(cookieParser());
 app.use(
   cors({
     origin: [
