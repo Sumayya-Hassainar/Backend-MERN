@@ -13,7 +13,7 @@ const app = express();
 
 app.use(
   cors({
-    origin:"http://localhost:5174",
+    origin:"https://monumental-ganache-0823b3.netlify.app/",
     credentials: true,
   
   })
