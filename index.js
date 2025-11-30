@@ -12,16 +12,19 @@ const app = express();
 
 // ===== CORS CONFIG =====
 app.use(cookieParser());
+
 app.use(
   cors({
     origin: [
-      "http://localhost:5173",                        // dev
-      "https://frontend-mern-17.onrender.com",   // deployed frontend
+      "http://localhost:5173",                      // local dev
+      "https://silly-cascaron-014ccd.netlify.app",  // ✅ your Netlify frontend
     ],
-    credentials: true,
+    credentials: true, // only needed if you send cookies / auth headers
   })
 );
 
+// (optional but good for safety with some browsers/proxies)
+app.options("*", cors());
 // =======================
 
 app.use(express.json());
