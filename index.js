@@ -13,11 +13,14 @@ const app = express();
 
 app.use(
   cors({
-    origin:"https://steady-seahorse-88dd5f.netlify.app",
+    origin: [
+      "http://localhost:5173",                        // dev
+      "https://steady-seahorse-88dd5f.netlify.app",   // deployed frontend
+    ],
     credentials: true,
-  
   })
 );
+
 // =======================
 
 app.use(express.json());
