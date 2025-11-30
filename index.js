@@ -23,6 +23,10 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 // DB
 connectDB();
 
+app.get('/',(req,res)=>{
+    res.send("Welcome to my backend app")
+})
+
 // Routes
 app.use("/api", Routes);
 
