@@ -11,7 +11,7 @@ const app = express();
 
 // ===== CORS CONFIG =====
 const allowedOrigins = [
-  "http://localhost:5173",                        // local frontend
+  "frontend-mern-4vwo.vercel.app",                        // local frontend
   process.env.CLIENT_URL,                         // Vercel URL from env
 ].filter(Boolean); // remove undefined
 
