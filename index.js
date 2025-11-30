@@ -10,23 +10,12 @@ dotenv.config(); // ✅ MUST be at the very top before using process.env
 const app = express();
 
 // ===== CORS CONFIG =====
-const allowedOrigins = [
-  "frontend-mern-4vwo.vercel.app",                        // local frontend
-  process.env.CLIENT_URL,                         // Vercel URL from env
-].filter(Boolean); // remove undefined
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin (Postman, curl, health checks)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error("Not allowed by CORS"));
-    },
+    origin:"https://frontend-mern-4vwo.vercel.app/",
     credentials: true,
+    method:['get','post','delete','put','option'],
   })
 );
 // =======================
