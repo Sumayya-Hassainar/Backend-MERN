@@ -15,7 +15,7 @@ app.use(
   cors({
     origin:"https://frontend-mern-last.onrender.com",
     credentials: true,
-    method:['get','post','delete','put','option'],
+  
   })
 );
 // =======================
