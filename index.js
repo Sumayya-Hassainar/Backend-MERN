@@ -16,7 +16,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",                        // dev
-      "https://silly-cascaron-014ccd.netlify.app/",   // deployed frontend
+      "https://silly-cascaron-014ccd.netlify.app",   // deployed frontend
     ],
     credentials: true,
   })
