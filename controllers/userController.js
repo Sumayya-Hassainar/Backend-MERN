@@ -1,4 +1,6 @@
+ controllers/userController.js
 const User = require("../models/User");
+const Admin = require("../models/Admin");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const sendEmail = require("../utils/sendEmail");
@@ -62,35 +64,69 @@ const registerUser = async (req, res) => {
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+    if (!email || !password)
+      return res.status(400).json({ message: "Email and password required" });
 
-    // 1. Check user exists
+    // 1) check for admin first
+    const admin = await Admin.findOne({ email });
+    if (admin) {
+      // admin login: validate password and directly return token (no OTP)
+      const matchAdmin = await bcrypt.compare(password, admin.password);
+      if (!matchAdmin) {
+        return res.status(400).json({ message: "Invalid email or password" });
+      }
+
+      const token = generateToken(admin._id, "admin");
+      return res.status(200).json({
+        message: "Admin login successful",
+        token,
+        role: "admin",
+        user: { _id: admin._id, name: admin.name, email: admin.email },
+      });
+    }
+
+    // 2) Not admin → find user (customer/vendor)
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(400).json({ message: "Invalid email or password" });
+    }
 
-    // 2. Check password
     const match = await bcrypt.compare(password, user.password);
-    if (!match)
+    if (!match) {
       return res.status(400).json({ message: "Invalid email or password" });
+    }
 
-    // 3. Generate OTP
+    // OK password for customer/vendor — generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000); // 6-digit
-
     otpStore[email] = {
       otp,
-      expiresAt: Date.now() + 5 * 60 * 1000, // valid 5 minutes
+      expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
     };
 
-    console.log("OTP:", otp);
+    // send OTP by email
+    try {
+      await sendEmail({
+        to: email,
+        subject: "Your login OTP",
+        text: `Your login OTP is ${otp}. It is valid for 5 minutes.`,
+        html: `<p>Your login OTP is <b>${otp}</b>. It is valid for 5 minutes.</p>`,
+      });
+    } catch (sendErr) {
+      console.error("Error sending OTP email:", sendErr);
+      // delete otp if email failed
+      delete otpStore[email];
+      return res
+        .status(500)
+        .json({ message: "Failed to send OTP email. Try again later." });
+    }
 
-    // 4. Send mail
-    await sendEmail({
-      to: email,
-      subject: "Your Login OTP",
-      text: `Your OTP is ${otp}. It is valid for 5 minutes.`,
+    // Respond telling frontend to ask for OTP
+    return res.status(200).json({
+      message: "OTP sent to your email",
+      email,
+      role: user.role,
+      user: { _id: user._id, name: user.name, email: user.email, role: user.role },
     });
-
-    res.json({ message: "OTP sent to your email" });
   } catch (error) {
     console.error("loginUser error:", error);
     res.status(500).json({ message: "Server error" });
@@ -98,39 +134,41 @@ const loginUser = async (req, res) => {
 };
 
 // ------------------------------------------------------
-// LOGIN STEP 2 → VERIFY OTP + RETURN TOKEN
+// LOGIN STEP 2 → VERIFY OTP -> RETURN TOKEN
 // ------------------------------------------------------
 const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
+    if (!email || !otp) {
+      return res.status(400).json({ message: "Email and OTP required" });
+    }
 
-    // Check OTP exists
-    if (!otpStore[email]) {
+    const stored = otpStore[email];
+    if (!stored) {
       return res.status(400).json({ message: "OTP not found or expired" });
     }
 
-    const storedOtp = otpStore[email];
-
-    // Check OTP expire
-    if (Date.now() > storedOtp.expiresAt) {
+    if (Date.now() > stored.expiresAt) {
       delete otpStore[email];
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    // Check OTP correct?
-    if (String(storedOtp.otp) !== String(otp)) {
+    if (String(stored.otp) !== String(otp)) {
       return res.status(400).json({ message: "Incorrect OTP" });
     }
 
-    // OTP matched → delete it
+    // OTP valid -> remove it
     delete otpStore[email];
 
-    // Get user
+    // find the user
     const user = await User.findOne({ email }).select("-password");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     const token = generateToken(user._id, user.role);
 
-    res.json({
+    return res.status(200).json({
       message: "OTP verified successfully",
       token,
       role: user.role,
@@ -141,6 +179,7 @@ const verifyOtp = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // ------------------------------------------------------
 // GET PROFILE
