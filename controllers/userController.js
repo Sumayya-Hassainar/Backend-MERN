@@ -52,8 +52,7 @@ const registerUser = async (req, res) => {
 };
 
 // ----------------------------------------
-// LOGIN STEP 1 (Admin → NO OTP)
-// Existing Users → Dummy OTP
+// LOGIN (Customer → OTP, Vendor/Admin → Direct login)
 // ----------------------------------------
 const loginUser = async (req, res) => {
   try {
@@ -62,7 +61,9 @@ const loginUser = async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ message: "Email & password required" });
 
-    // ADMIN LOGIN
+    // -------------------------
+    // ADMIN LOGIN → NO OTP
+    // -------------------------
     const admin = await Admin.findOne({ email });
     if (admin) {
       const match = await bcrypt.compare(password, admin.password);
@@ -76,10 +77,13 @@ const loginUser = async (req, res) => {
         token,
         role: "admin",
         user: { _id: admin._id, name: admin.name, email: admin.email },
+        redirect: "/admin/panel",
       });
     }
 
-    // CUSTOMER / VENDOR LOGIN
+    // -------------------------
+    // USER (Customer or Vendor)
+    // -------------------------
     const user = await User.findOne({ email });
     if (!user)
       return res.status(400).json({ message: "Invalid credentials" });
@@ -88,19 +92,35 @@ const loginUser = async (req, res) => {
     if (!match)
       return res.status(400).json({ message: "Invalid credentials" });
 
-    // -----------------------------
-    // DUMMY OTP LOGIC
-    // -----------------------------
-    const dummyOtp = "123456"; // FIXED OTP
+    // -------------------------
+    // VENDOR LOGIN (NO OTP)
+    // -------------------------
+    if (user.role === "vendor") {
+      const token = generateToken(user._id, "vendor");
+
+      return res.json({
+        message: "Vendor login successful",
+        token,
+        role: "vendor",
+        user: { _id: user._id, name: user.name, email: user.email },
+        redirect: "/vendor/dashboard",
+      });
+    }
+
+    // -------------------------
+    // CUSTOMER LOGIN → OTP REQUIRED
+    // -------------------------
+    const dummyOtp = "123456";
     otpStore[email] = dummyOtp;
 
-    console.log("Dummy OTP for", email, "=", dummyOtp);
+    console.log("Customer OTP for", email, "=", dummyOtp);
 
     return res.json({
-      message: "OTP sent (dummy)",
-      email,
-      role: user.role,
+      message: "OTP sent to customer",
       otpSent: true,
+      email,
+      role: "customer",
+      redirect: "/otp",
     });
 
   } catch (err) {
@@ -110,7 +130,7 @@ const loginUser = async (req, res) => {
 };
 
 // ----------------------------------------
-// LOGIN STEP 2 → Verify OTP
+// VERIFY OTP (Customers only)
 // ----------------------------------------
 const verifyOtp = async (req, res) => {
   try {
@@ -135,6 +155,7 @@ const verifyOtp = async (req, res) => {
       token,
       role: user.role,
       user,
+      redirect: "/products",
     });
 
   } catch (err) {
@@ -147,10 +168,12 @@ const verifyOtp = async (req, res) => {
 const getProfile = async (req, res) => {
   res.json(req.user);
 };
+
 // ----------------------------------------
-const logoutUser = async () => {
+const logoutUser = async (req, res) => {
   res.json({ message: "Logged out" });
 };
+
 // ----------------------------------------
 const checkRole = async (req, res) => {
   res.json({ role: req.user.role });
