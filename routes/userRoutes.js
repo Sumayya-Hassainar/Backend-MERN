@@ -1,10 +1,10 @@
-// routes/authRoutes.js
 const express = require("express");
 const router = express.Router();
 
 const {
   registerUser,
-  loginUser,
+  loginUser,     // Step 1: send OTP
+  verifyOtp,     // Step 2: verify OTP
   getProfile,
   logoutUser,
   checkRole,
@@ -12,14 +12,31 @@ const {
 
 const { protect } = require("../middleware/authMiddleware");
 
-// 🔹 Public auth routes
-router.post("/register", registerUser); // customer/vendor register
-router.post("/login", loginUser);       // customer/vendor/admin login
+// ------------------------------------------------------
+// 🔹 PUBLIC AUTH ROUTES
+// ------------------------------------------------------
 
-// 🔹 Protected routes (require valid JWT)
-router.get("/profile", protect, getProfile);   // get logged-in user profile
-router.post("/logout", protect, logoutUser);   // simple logout response
-router.get("/check-role", protect, checkRole); // returns { role }
+// Customer / Vendor register
+router.post("/register", registerUser);
 
-// export
+// Login Step 1 → check password + send OTP
+router.post("/login", loginUser);
+
+// Login Step 2 → verify OTP → return token
+router.post("/verify-otp", verifyOtp);
+
+// ------------------------------------------------------
+// 🔹 PROTECTED USER ROUTES (Need JWT)
+// ------------------------------------------------------
+
+// Get logged-in profile
+router.get("/profile", protect, getProfile);
+
+// Logout user
+router.post("/logout", protect, logoutUser);
+
+// Returns only { role } for redirect handling
+router.get("/check-role", protect, checkRole);
+
+// ------------------------------------------------------
 module.exports = router;

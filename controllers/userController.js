@@ -1,153 +1,175 @@
-// controllers/userController.js
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const sendEmail = require("../utils/sendEmail");
 
-// Generate JWT Token
+// Temporary OTP storage (DB recommended, but OK for now)
+let otpStore = {};  
+// Structure: otpStore[email] = { otp, expiresAt }
+
+// ------------------------------------------------------
+// Generate JWT
+// ------------------------------------------------------
 const generateToken = (id, role) => {
   return jwt.sign({ id, role }, process.env.JWT_SECRET, {
     expiresIn: "7d",
   });
 };
 
-// Register User (customer or vendor)
+// ------------------------------------------------------
+// REGISTER USER
+// ------------------------------------------------------
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password, role, shopName } = req.body;
+    const { name, email, password, role } = req.body;
 
+    // Validation
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Please fill all fields" });
     }
 
-    const userExists = await User.findOne({ email });
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
+    // User already exists?
+    const exists = await User.findOne({ email });
+    if (exists) {
+      return res.status(400).json({ message: "Email already registered" });
     }
-
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-
-    const isVendor = role === "vendor";
 
     const user = await User.create({
       name,
       email,
-      password: hashedPassword,
-      role: isVendor ? "vendor" : "customer",
-      shopName: isVendor ? shopName : undefined,
-      // customers = true, vendors start pending
-      isVendorApproved: isVendor ? false : true,
+      password,
+      role: role || "customer",
     });
 
-    res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      isVendorApproved: user.isVendorApproved,
-      token: generateToken(user._id, user.role),
+    return res.status(201).json({
+      message: "Registration successful",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
     });
-  } catch (error) {
-    console.error("Register error:", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.log("registerUser error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// Login User (includes FIXED ADMIN login)
+// ------------------------------------------------------
+// LOGIN STEP 1 → CHECK PASSWORD + SEND OTP
+// ------------------------------------------------------
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "Please provide email & password" });
-    }
-
-    // 1) Fixed admin login via .env
-    if (
-      process.env.ADMIN_EMAIL &&
-      process.env.ADMIN_PASSWORD &&
-      email === process.env.ADMIN_EMAIL &&
-      password === process.env.ADMIN_PASSWORD
-    ) {
-      // fake admin user payload (no DB record needed)
-      const adminPayload = {
-        _id: "fixed-admin-id",
-        name: process.env.ADMIN_NAME || "Admin",
-        email: process.env.ADMIN_EMAIL,
-        role: "admin",
-      };
-
-      const token = generateToken(adminPayload._id, adminPayload.role);
-
-      return res.json({
-        _id: adminPayload._id,
-        name: adminPayload.name,
-        email: adminPayload.email,
-        role: adminPayload.role,
-        isVendorApproved: true, // not relevant, but keep consistent
-        token,
-        message: "Admin login successful",
-      });
-    }
-
-    // 2) Normal DB user login
+    // 1. Check user exists
     const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user)
+      return res.status(400).json({ message: "Invalid email or password" });
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch)
-      return res.status(401).json({ message: "Invalid credentials" });
+    // 2. Check password
+    const match = await bcrypt.compare(password, user.password);
+    if (!match)
+      return res.status(400).json({ message: "Invalid email or password" });
 
-    // Block vendor login until approved
-    if (user.role === "vendor" && !user.isVendorApproved) {
-      return res.status(403).json({
-        message: "Your vendor account is pending approval by admin.",
-      });
+    // 3. Generate OTP
+    const otp = Math.floor(100000 + Math.random() * 900000); // 6-digit
+
+    otpStore[email] = {
+      otp,
+      expiresAt: Date.now() + 5 * 60 * 1000, // valid 5 minutes
+    };
+
+    console.log("OTP:", otp);
+
+    // 4. Send mail
+    await sendEmail({
+      to: email,
+      subject: "Your Login OTP",
+      text: `Your OTP is ${otp}. It is valid for 5 minutes.`,
+    });
+
+    res.json({ message: "OTP sent to your email" });
+  } catch (error) {
+    console.error("loginUser error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ------------------------------------------------------
+// LOGIN STEP 2 → VERIFY OTP + RETURN TOKEN
+// ------------------------------------------------------
+const verifyOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    // Check OTP exists
+    if (!otpStore[email]) {
+      return res.status(400).json({ message: "OTP not found or expired" });
     }
+
+    const storedOtp = otpStore[email];
+
+    // Check OTP expire
+    if (Date.now() > storedOtp.expiresAt) {
+      delete otpStore[email];
+      return res.status(400).json({ message: "OTP expired" });
+    }
+
+    // Check OTP correct?
+    if (String(storedOtp.otp) !== String(otp)) {
+      return res.status(400).json({ message: "Incorrect OTP" });
+    }
+
+    // OTP matched → delete it
+    delete otpStore[email];
+
+    // Get user
+    const user = await User.findOne({ email }).select("-password");
+
+    const token = generateToken(user._id, user.role);
 
     res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
+      message: "OTP verified successfully",
+      token,
       role: user.role,
-      isVendorApproved: user.isVendorApproved,
-      token: generateToken(user._id, user.role),
+      user,
     });
   } catch (error) {
-    console.error("Login error:", error);
-    res.status(500).json({ message: error.message });
+    console.error("verifyOtp error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
-// Get Profile
+// ------------------------------------------------------
+// GET PROFILE
+// ------------------------------------------------------
 const getProfile = async (req, res) => {
-  try {
-    // req.user is set by protect middleware
-    const user = await User.findById(req.user._id).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.json(user);
-  } catch (error) {
-    console.error("Get profile error:", error);
-    res.status(500).json({ message: error.message });
-  }
+  res.json(req.user);
 };
 
-// Logout (simple for JWT)
-const logoutUser = (req, res) => {
-  // On frontend, just remove token from localStorage
-  res.json({ message: "Logged out successfully" });
+// ------------------------------------------------------
+// LOGOUT
+// ------------------------------------------------------
+const logoutUser = async (req, res) => {
+  res.json({ message: "Logged out" });
 };
 
-// Check Role
-const checkRole = (req, res) => {
+// ------------------------------------------------------
+// CHECK ROLE
+// ------------------------------------------------------
+const checkRole = async (req, res) => {
   res.json({ role: req.user.role });
 };
 
+// ------------------------------------------------------
+// EXPORT (same style as adminVendorController)
+// ------------------------------------------------------
 module.exports = {
   registerUser,
   loginUser,
+  verifyOtp,
   getProfile,
   logoutUser,
   checkRole,
