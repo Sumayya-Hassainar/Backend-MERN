@@ -3,44 +3,42 @@ const asyncHandler = require("express-async-handler");
 const User = require("../models/User");
 
 const protect = asyncHandler(async (req, res, next) => {
-  let token = req.headers.authorization?.split(" ")[1];
+  let token;
 
-  if (!token) {
-    return res.status(401).json({ message: "Not authorized, no token" });
-  }
+  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+    try {
+      token = req.headers.authorization.split(" ")[1];
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id).select("-password");
+      if (!user) {
+        return res.status(401).json({ message:  "user not found "});
+      }
 
-    const user = await User.findById(decoded.id).select("-password");
-
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
+      req.user = user;
+      next();
+    } catch (error) {
+      console.error("Auth error:", error);
+      return res.status(401).json({ message: "Not authorized, token failed" });
     }
-
-    req.user = user;
-    next();
-  } catch (err) {
-    return res.status(401).json({ message: "Not authorized, token failed" });
+  } else {
+    return res.status(401).json({ message: "Not authorized, no token" });
   }
 });
 
 const adminOnly = (req, res, next) => {
-  req.user.role === "admin"
-    ? next()
-    : res.status(403).json({ message: "Admin access only" });
+  if (req.user && req.user.role === "admin") return next();
+  return res.status(403).json({ message: "Admin access only" });
 };
 
 const vendorOnly = (req, res, next) => {
-  req.user.role === "vendor"
-    ? next()
-    : res.status(403).json({ message: "Vendor access only" });
+  if (req.user && req.user.role === "vendor") return next();
+  return res.status(403).json({ message: "Vendor access only" });
 };
 
 const customerOnly = (req, res, next) => {
-  req.user.role === "customer"
-    ? next()
-    : res.status(403).json({ message: "Customer access only" });
+  if (req.user && req.user.role === "customer") return next();
+  return res.status(403).json({ message: "Customer access only" });
 };
 
 module.exports = { protect, adminOnly, vendorOnly, customerOnly };

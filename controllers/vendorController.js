@@ -1,191 +1,154 @@
-// controllers/adminVendorController.js
+const Vendor = require("../models/Vendor");
 const User = require("../models/User");
 
-// ✅ Create Vendor (Admin only)
-// payload: { name, email, password, shopName?, ... }
+// ===============================
+// CREATE VENDOR (Admin)
+// ===============================
 const createVendor = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
+    const { userId, shopName, description, gstNumber, address, logo } = req.body;
+
+    if (!userId || !shopName) {
+      return res.status(400).json({ message: "userId & shopName are required" });
     }
 
-    const { name, email, password, shopName } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    if (!name || !email || !password) {
-      return res
-        .status(400)
-        .json({ message: "name, email and password are required" });
-    }
+    const exists = await Vendor.findOne({ user: userId });
+    if (exists) return res.status(400).json({ message: "Vendor already exists" });
 
-    // check if already exists
-    const existing = await User.findOne({ email });
-    if (existing) {
-      return res.status(400).json({ message: "User with this email already exists" });
-    }
-
-    // let your User model’s pre-save hook hash password
-    const vendor = await User.create({
-      name,
-      email,
-      password,
-      role: "vendor",
-      shopName: shopName || "",
-      isVendorApproved: true, // directly approved by admin
+    const vendor = await Vendor.create({
+      user: userId,
+      shopName,
+      description,
+      gstNumber,
+      address,
+      logo,
+      complianceVerified: false, // pending initially
     });
 
-    res.status(201).json({
-      message: "Vendor created successfully",
-      vendor: {
-        _id: vendor._id,
-        name: vendor.name,
-        email: vendor.email,
-        shopName: vendor.shopName,
-        role: vendor.role,
-        isVendorApproved: vendor.isVendorApproved,
-      },
-    });
-  } catch (error) {
-    console.error("createVendor error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(201).json({ message: "Vendor created", vendor });
+  } catch (err) {
+    console.error("createVendor", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ Get All Vendors
+// ===============================
+// GET ALL VENDORS
+// ===============================
 const getVendors = async (req, res) => {
   try {
-    const vendors = await User.find({ role: "vendor" }).select("-password");
+    const vendors = await Vendor.find().populate("user", "-password");
     res.status(200).json(vendors);
-  } catch (error) {
-    console.error("getVendors error:", error);
-    res.status(500).json({ message: error.message });
+  } catch (err) {
+    console.error("getVendors", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ Get Single Vendor
+// ===============================
+// GET SINGLE VENDOR
+// ===============================
 const getVendorById = async (req, res) => {
   try {
-    const vendor = await User.findOne({
-      _id: req.params.id,
-      role: "vendor",
-    }).select("-password");
+    const vendor = await Vendor.findById(req.params.id).populate("user", "-password");
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
 
-    if (!vendor) {
-      return res.status(404).json({ message: "Vendor not found" });
-    }
-
-    res.status(200).json(vendor);
-  } catch (error) {
-    console.error("getVendorById error:", error);
-    res.status(500).json({ message: error.message });
+    res.json(vendor);
+  } catch (err) {
+    console.error("getVendorById", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ Update Vendor (Admin only)
+// ===============================
+// UPDATE VENDOR
+// ===============================
 const updateVendor = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
-    }
-
-    const updates = { ...req.body };
-    // never allow role change from here (extra safety)
-    delete updates.role;
-    delete updates.password; // don’t change password from this endpoint
-
-    const vendor = await User.findOneAndUpdate(
-      { _id: req.params.id, role: "vendor" },
-      updates,
+    const vendor = await Vendor.findByIdAndUpdate(
+      req.params.id,
+      req.body,
       { new: true }
-    ).select("-password");
+    ).populate("user", "-password");
 
-    if (!vendor) {
-      return res.status(404).json({ message: "Vendor not found" });
-    }
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
 
-    res.status(200).json({
-      message: "Vendor updated successfully",
-      vendor,
-    });
-  } catch (error) {
-    console.error("updateVendor error:", error);
-    res.status(500).json({ message: error.message });
+    res.json({ message: "Vendor updated", vendor });
+  } catch (err) {
+    console.error("updateVendor", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ Delete Vendor (Admin only)
+// ===============================
+// DELETE VENDOR
+// ===============================
 const deleteVendor = async (req, res) => {
   try {
-    if (!req.user || req.user.role !== "admin") {
-      return res.status(403).json({ message: "Access denied" });
-    }
+    const vendor = await Vendor.findByIdAndDelete(req.params.id);
 
-    const vendor = await User.findOneAndDelete({
-      _id: req.params.id,
-      role: "vendor",
-    });
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
 
-    if (!vendor) {
-      return res.status(404).json({ message: "Vendor not found" });
-    }
-
-    res.status(200).json({ message: "Vendor deleted successfully" });
-  } catch (error) {
-    console.error("deleteVendor error:", error);
-    res.status(500).json({ message: error.message });
+    res.json({ message: "Vendor deleted" });
+  } catch (err) {
+    console.error("deleteVendor", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
-// ✅ Already existing pending / approve / reject you had
-// (I’ll keep them for your admin flow)
-
+// ===============================
+// GET PENDING VENDORS
+// ===============================
 const getPendingVendors = async (req, res) => {
   try {
-    const pending = await User.find({
-      role: "vendor",
-      isVendorApproved: false,
-    }).select("-password");
+    const pending = await Vendor.find({ complianceVerified: false })
+      .populate("user", "-password");
 
-    res.status(200).json(pending);
-  } catch (error) {
-    console.error("getPendingVendors error:", error);
-    res.status(500).json({ message: "Failed to fetch pending vendors" });
+    res.json(pending);
+  } catch (err) {
+    console.error("getPendingVendors", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
+// ===============================
+// APPROVE VENDOR
+// ===============================
 const approveVendor = async (req, res) => {
   try {
-    const vendor = await User.findById(req.params.id);
+    const vendor = await Vendor.findById(req.params.id);
 
-    if (!vendor || vendor.role !== "vendor") {
-      return res.status(404).json({ message: "Vendor not found" });
-    }
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
 
-    vendor.isVendorApproved = true;
+    vendor.complianceVerified = true;
     await vendor.save();
 
-    res.status(200).json({ message: "Vendor approved", vendor });
-  } catch (error) {
-    console.error("approveVendor error:", error);
-    res.status(500).json({ message: "Failed to approve vendor" });
+    res.json({ message: "Vendor Approved", vendor });
+  } catch (err) {
+    console.error("approveVendor", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
+// ===============================
+// REJECT VENDOR
+// ===============================
 const rejectVendor = async (req, res) => {
   try {
-    const vendor = await User.findById(req.params.id);
+    const vendor = await Vendor.findById(req.params.id);
 
-    if (!vendor || vendor.role !== "vendor") {
-      return res.status(404).json({ message: "Vendor not found" });
-    }
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
 
-    // keep them as not-approved, or delete – your choice
-    vendor.isVendorApproved = false;
+    vendor.complianceVerified = false;
     await vendor.save();
 
-    res.status(200).json({ message: "Vendor rejected", vendor });
-  } catch (error) {
-    console.error("rejectVendor error:", error);
-    res.status(500).json({ message: "Failed to reject vendor" });
+    res.json({ message: "Vendor Rejected", vendor });
+  } catch (err) {
+    console.error("rejectVendor", err);
+    res.status(500).json({ message: err.message });
   }
 };
 
