@@ -182,6 +182,15 @@ const getProfile = (req, res) => {
 const logoutUser = (req, res) => {
   res.json({ message: "Logged out" });
 };
+// ==================================================
+// CHECK ROLE (Admin / Vendor / Customer)
+// ==================================================
+const checkRole = (req, res) => {
+  return res.json({
+    role: req.user.role,
+    id: req.user.id,
+  });
+};
 
 module.exports = {
   registerUser,
@@ -189,4 +198,5 @@ module.exports = {
   verifyOtp,
   getProfile,
   logoutUser,
+  checkRole,
 };
