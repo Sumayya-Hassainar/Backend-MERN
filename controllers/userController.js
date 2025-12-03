@@ -1,3 +1,4 @@
+// controllers/userController.js
 const User = require("../models/User");
 const Admin = require("../models/Admin");
 const jwt = require("jsonwebtoken");
@@ -6,64 +7,58 @@ const bcrypt = require("bcryptjs");
 // In-memory OTP store
 let otpStore = {}; // { email: "123456" }
 
-// ----------------------------------------
 // Generate JWT
-// ----------------------------------------
 const generateToken = (id, role) => {
-  return jwt.sign({ id, role }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
-  });
+  return jwt.sign({ id, role }, process.env.JWT_SECRET, { expiresIn: "7d" });
 };
 
-// ----------------------------------------
-// REGISTER (customer/vendor)
-// ----------------------------------------
+// ==================================================
+// REGISTER USER
+// ==================================================
 const registerUser = async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
 
-    if (!name || !email || !password) {
+    if (!name || !email || !password)
       return res.status(400).json({ message: "All fields required" });
-    }
 
     const exists = await User.findOne({ email });
     if (exists) return res.status(400).json({ message: "Email already exists" });
 
+    const hashed = await bcrypt.hash(password, 10);
+
     const user = await User.create({
       name,
       email,
-      password,
+      password: hashed,
       role: role || "customer",
+      isFirstLogin: true, // important
     });
 
     return res.status(201).json({
       message: "Registration successful",
       user: {
         _id: user._id,
-        name: user.name,
         email: user.email,
         role: user.role,
       },
     });
   } catch (err) {
-    console.log("registerUser:", err);
+    console.log(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ----------------------------------------
-// LOGIN (Customer → OTP, Vendor/Admin → Direct login)
-// ----------------------------------------
+// ==================================================
+// LOGIN USER
+// ==================================================
 const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
-
     if (!email || !password)
       return res.status(400).json({ message: "Email & password required" });
 
-    // -------------------------
-    // ADMIN LOGIN → NO OTP
-    // -------------------------
+    // 1. ---- ADMIN LOGIN ----
     const admin = await Admin.findOne({ email });
     if (admin) {
       const match = await bcrypt.compare(password, admin.password);
@@ -76,14 +71,12 @@ const loginUser = async (req, res) => {
         message: "Admin login successful",
         token,
         role: "admin",
-        user: { _id: admin._id, name: admin.name, email: admin.email },
+        user: { _id: admin._id, email: admin.email },
         redirect: "/admin/panel",
       });
     }
 
-    // -------------------------
-    // USER (Customer or Vendor)
-    // -------------------------
+    // 2. ---- NORMAL USER (CUSTOMER / VENDOR) ----
     const user = await User.findOne({ email });
     if (!user)
       return res.status(400).json({ message: "Invalid credentials" });
@@ -92,9 +85,9 @@ const loginUser = async (req, res) => {
     if (!match)
       return res.status(400).json({ message: "Invalid credentials" });
 
-    // -------------------------
-    // VENDOR LOGIN (NO OTP)
-    // -------------------------
+    // -----------------------------
+    // VENDOR → DIRECT LOGIN
+    // -----------------------------
     if (user.role === "vendor") {
       const token = generateToken(user._id, "vendor");
 
@@ -102,36 +95,53 @@ const loginUser = async (req, res) => {
         message: "Vendor login successful",
         token,
         role: "vendor",
-        user: { _id: user._id, name: user.name, email: user.email },
+        user: { _id: user._id, email: user.email },
         redirect: "/vendor/dashboard",
       });
     }
 
-    // -------------------------
-    // CUSTOMER LOGIN → OTP REQUIRED
-    // -------------------------
+    // -----------------------------
+    // CUSTOMER FIRST LOGIN → NO OTP
+    // -----------------------------
+    if (user.role === "customer" && user.isFirstLogin === true) {
+      user.isFirstLogin = false;
+      await user.save();
+
+      const token = generateToken(user._id, "customer");
+
+      return res.json({
+        message: "Customer first login successful",
+        token,
+        role: "customer",
+        user: { _id: user._id, email: user.email },
+        redirect: "/products",
+      });
+    }
+
+    // -----------------------------
+    // CUSTOMER RETURNING LOGIN → OTP
+    // -----------------------------
     const dummyOtp = "123456";
     otpStore[email] = dummyOtp;
 
-    console.log("Customer OTP for", email, "=", dummyOtp);
+    console.log("OTP for", email, "=", dummyOtp);
 
     return res.json({
-      message: "OTP sent to customer",
+      message: "OTP required",
       otpSent: true,
       email,
       role: "customer",
       redirect: "/otp",
     });
-
   } catch (err) {
-    console.log("loginUser:", err);
+    console.log(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ----------------------------------------
-// VERIFY OTP (Customers only)
-// ----------------------------------------
+// ==================================================
+// VERIFY OTP
+// ==================================================
 const verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -145,6 +155,7 @@ const verifyOtp = async (req, res) => {
     delete otpStore[email];
 
     const user = await User.findOne({ email }).select("-password");
+
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
@@ -157,26 +168,19 @@ const verifyOtp = async (req, res) => {
       user,
       redirect: "/products",
     });
-
   } catch (err) {
-    console.log("verifyOtp:", err);
+    console.log(err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ----------------------------------------
-const getProfile = async (req, res) => {
+// ==================================================
+const getProfile = (req, res) => {
   res.json(req.user);
 };
 
-// ----------------------------------------
-const logoutUser = async (req, res) => {
+const logoutUser = (req, res) => {
   res.json({ message: "Logged out" });
-};
-
-// ----------------------------------------
-const checkRole = async (req, res) => {
-  res.json({ role: req.user.role });
 };
 
 module.exports = {
@@ -185,5 +189,4 @@ module.exports = {
   verifyOtp,
   getProfile,
   logoutUser,
-  checkRole,
 };

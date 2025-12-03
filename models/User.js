@@ -1,50 +1,35 @@
-// models/User.js
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
-const userSchema = new mongoose.Schema(
-  {
-    name: {
-      type: String,
-      required: [true, "Name is required"],
-    },
-    email: {
-      type: String,
-      required: [true, "Email is required"],
-      unique: true,
-      lowercase: true,
-    },
-    password: {
-      type: String,
-      required: [true, "Password is required"],
-      minlength: 6,
-    },
-    role: {
-      type: String,
-      enum: ["customer", "vendor", "admin"],
-      default: "customer",
-    },
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
 
-    // ✅ NEW: vendor approval status
-    isVendorApproved: {
-      type: Boolean,
-      default: false, // new vendors are pending by default
-    },
-
-    // (optional) vendor extra fields
-    shopName: {
-      type: String,
-    },
+  role: {
+    type: String,
+    enum: ["admin", "vendor", "customer"],
+    default: "customer",
   },
-  { timestamps: true }
-);
 
-// (Optional) pre-save hashing if you want
-// userSchema.pre("save", async function (next) {
-//   if (!this.isModified("password")) return next();
-//   const salt = await bcrypt.genSalt(10);
-//   this.password = await bcrypt.hash(this.password, salt);
-//   next();
-// });
+  isFirstLogin: {
+    type: Boolean,
+    default: true,
+  },
+
+  createdAt: { type: Date, default: Date.now },
+});
+
+// match password
+userSchema.methods.matchPassword = async function (enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// hash password before saving
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) return next();
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+});
 
 module.exports = mongoose.model("User", userSchema);
