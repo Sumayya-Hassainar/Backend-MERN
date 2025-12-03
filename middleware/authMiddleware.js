@@ -1,21 +1,31 @@
+// middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
 const asyncHandler = require("express-async-handler");
 const User = require("../models/User");
+const Admin = require("../models/Admin");
 
+// 🔹 Protect route & attach user/admin to req.user
 const protect = asyncHandler(async (req, res, next) => {
   let token;
 
-  if (req.headers.authorization && req.headers.authorization.startsWith("Bearer")) {
+  if (req.headers.authorization?.startsWith("Bearer")) {
     try {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      const user = await User.findById(decoded.id).select("-password");
-      if (!user) {
-        return res.status(401).json({ message:  "user not found "});
+      let user;
+      // Check role to fetch from correct model
+      if (decoded.role === "admin") {
+        user = await Admin.findById(decoded.id).select("-password");
+      } else {
+        user = await User.findById(decoded.id).select("-password");
       }
 
-      req.user = user;
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      req.user = user; // attach to request
       next();
     } catch (error) {
       console.error("Auth error:", error);
@@ -26,18 +36,19 @@ const protect = asyncHandler(async (req, res, next) => {
   }
 });
 
+// 🔹 Role-based access
 const adminOnly = (req, res, next) => {
-  if (req.user && req.user.role === "admin") return next();
+  if (req.user?.role === "admin") return next();
   return res.status(403).json({ message: "Admin access only" });
 };
 
 const vendorOnly = (req, res, next) => {
-  if (req.user && req.user.role === "vendor") return next();
+  if (req.user?.role === "vendor") return next();
   return res.status(403).json({ message: "Vendor access only" });
 };
 
 const customerOnly = (req, res, next) => {
-  if (req.user && req.user.role === "customer") return next();
+  if (req.user?.role === "customer") return next();
   return res.status(403).json({ message: "Customer access only" });
 };
 

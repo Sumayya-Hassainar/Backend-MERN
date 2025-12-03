@@ -1,28 +1,46 @@
 const express = require("express");
+const router = express.Router();
+
 const {
   registerAdmin,
   loginAdmin,
   getDashboard,
   getAllUsersAndVendors,
   getVendors,
-  getPendingVendors,   // ✅ import
+  getPendingVendors,
   approveVendor,
   rejectVendor,
 } = require("../controllers/adminController");
+
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
-const router = express.Router();
-
+// ------------------ Auth ------------------
+// Register a new admin (optional, for setup)
 router.post("/register", registerAdmin);
+
+// Login admin
 router.post("/login", loginAdmin);
 
-router.get("/dashboard", protect, adminOnly, getDashboard);
-router.get("/users-vendors", protect, adminOnly, getAllUsersAndVendors);
+// ------------------ Admin-protected routes ------------------
+// All routes below require authentication + admin role
+router.use(protect, adminOnly);
 
-router.get("/vendors", protect, adminOnly, getVendors);
-router.get("/vendors/pending", protect, adminOnly, getPendingVendors); // ✅ matches frontend
+// Admin dashboard stats
+router.get("/dashboard", getDashboard);
 
-router.patch("/vendors/:id/approve", protect, adminOnly, approveVendor);
-router.patch("/vendors/:id/reject", protect, adminOnly, rejectVendor);
+// List all users and vendors
+router.get("/users-vendors", getAllUsersAndVendors);
+
+// List all vendors
+router.get("/vendors", getVendors);
+
+// List pending vendors
+router.get("/vendors/pending", getPendingVendors);
+
+// Approve a vendor
+router.patch("/vendors/:id/approve", approveVendor);
+
+// Reject a vendor
+router.patch("/vendors/:id/reject", rejectVendor);
 
 module.exports = router;
