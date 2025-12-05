@@ -1,37 +1,60 @@
-// models/Order.js
 const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema(
   {
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+
+    vendor: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
     products: [
       {
-        product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
-        quantity: { type: Number, required: true },
-        price: { type: Number, required: true },
+        product: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Product",
+          required: true,
+        },
+        name: {
+          type: String,
+          required: true,
+        },
+        price: {
+          type: Number,
+          required: true,
+        },
+        quantity: {
+          type: Number,
+          required: true,
+        },
       },
     ],
+
     shippingAddress: {
-      fullName: String,
-      phone: String,
-      street: String,
-      city: String,
-      state: String,
-      country: String,
-      pincode: String,
+      type: String,
+      required: true,
     },
+
     paymentMethod: {
       type: String,
-      enum: ["cod", "card", "upi", "stripe"],
-      default: "cod",
+      required: true,
     },
-    totalAmount: { type: Number, required: true },
+
+    totalAmount: {
+      type: Number,
+      required: true,
+    },
+
     orderStatus: {
       type: String,
-      enum: ["Pending", "Shipped", "Delivered", "Cancelled"],
       default: "Pending",
     },
-    trackingStatus: { type: String, default: "" },
   },
   { timestamps: true }
 );

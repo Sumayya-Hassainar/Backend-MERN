@@ -3,31 +3,25 @@ const router = express.Router();
 
 const {
   createOrder,
+  assignOrderToVendor,
+  updateOrderStatus,
   getOrders,
   getMyOrders,
-  getSingleOrder,   // ✅
-  updateOrderStatus,
+  getVendorOrders,
   deleteOrder,
+  getOrderById,
 } = require("../controllers/orderController");
 
-const { protect, adminOnly } = require("../middleware/authMiddleware");
+const { protect, adminOnly, vendorOnly } = require("../middleware/authMiddleware");
 
-// Customer creates an order
+/* ================= CUSTOMER ================= */
+/// SPECIFIC ROUTES FIRST
+router.get("/myorders", protect, getMyOrders);
+router.get("/vendor", protect, vendorOnly, getVendorOrders);
 router.post("/", protect, createOrder);
-
-// Customer fetches their own orders
-router.get("/my", protect, getMyOrders);
-
-// Customer fetches one order detail
-router.get("/:id", protect, getSingleOrder);
-
-// Admin-only list
-router.get("/", protect, adminOnly, getOrders);
-
-// Admin-only update order status
-router.put("/:id/status", protect, adminOnly, updateOrderStatus);
-
-// Admin-only delete order
+router.put("/assign", protect, adminOnly, assignOrderToVendor);
+router.put("/:id/status", protect, updateOrderStatus);
 router.delete("/:id", protect, adminOnly, deleteOrder);
+router.get("/order/:id", protect, getOrderById);
 
 module.exports = router;

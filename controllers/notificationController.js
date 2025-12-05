@@ -1,68 +1,73 @@
 const Notification = require("../models/Notification");
 const User = require("../models/User");
-const Vendor = require("../models/Vendor"); // if you want vendor-level notifications
 
-// Create one notification directly (generic)
+/* =======================================================
+   ✅ CREATE NOTIFICATION (Admin Only / Optional Manual API)
+======================================================== */
 const createNotification = async (req, res) => {
   try {
-    const { recipient, recipientModel, message, type } = req.body;
+    const { recipient, recipientModel, message, type, orderId } = req.body;
+
+    if (!recipient || !message || !type) {
+      return res.status(400).json({ message: "Recipient, message, and type are required" });
+    }
 
     const notification = await Notification.create({
       recipient,
       recipientModel,
       message,
-      type,
+      type,      // Order | Payment | System | Dispute
+      orderId,
     });
 
     res.status(201).json(notification);
   } catch (error) {
     console.error("Create notification error:", error);
-    res.status(400).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// Get ALL notifications (admin only – use adminOnly middleware on route)
+/* =======================================================
+   ✅ ADMIN: GET ALL NOTIFICATIONS
+======================================================== */
 const getNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find()
       .sort({ createdAt: -1 })
-      .populate("recipient");
+      .populate("recipient", "name email role");
+
     res.status(200).json(notifications);
   } catch (error) {
     console.error("Get notifications error:", error);
-    res.status(400).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ Get notifications for logged-in user (customer/vendor/admin)
+/* =======================================================
+   ✅ USER / VENDOR: GET MY NOTIFICATIONS
+======================================================== */
 const getMyNotifications = async (req, res) => {
   try {
-    const userId = req.user._id;
-
     const notifications = await Notification.find({
-      recipient: userId,
-      // recipientModel could be "User", "Vendor" depending on how you store
-      // If you always store recipientModel = "User" for all, then no need to filter by model
+      recipient: req.user._id,
     })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .populate("recipient", "name email role");
 
     res.status(200).json(notifications);
   } catch (error) {
     console.error("Get my notifications error:", error);
-    res.status(400).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ Mark one notification as read
+/* =======================================================
+   ✅ MARK SINGLE NOTIFICATION AS READ
+======================================================== */
 const markNotificationAsRead = async (req, res) => {
   try {
-    const notificationId = req.params.id;
-
     const notification = await Notification.findOneAndUpdate(
-      {
-        _id: notificationId,
-        recipient: req.user._id, // user can only modify his own notification
-      },
+      { _id: req.params.id, recipient: req.user._id },
       { isRead: true },
       { new: true }
     );
@@ -73,12 +78,14 @@ const markNotificationAsRead = async (req, res) => {
 
     res.status(200).json(notification);
   } catch (error) {
-    console.error("Mark notification read error:", error);
-    res.status(400).json({ message: error.message });
+    console.error("Mark notification as read error:", error);
+    res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ Mark all my notifications as read
+/* =======================================================
+   ✅ MARK ALL MY NOTIFICATIONS AS READ
+======================================================== */
 const markAllMyNotificationsAsRead = async (req, res) => {
   try {
     await Notification.updateMany(
@@ -88,54 +95,71 @@ const markAllMyNotificationsAsRead = async (req, res) => {
 
     res.status(200).json({ message: "All notifications marked as read" });
   } catch (error) {
-    console.error("Mark all notifications read error:", error);
-    res.status(400).json({ message: error.message });
+    console.error("Mark all notifications error:", error);
+    res.status(500).json({ message: error.message });
   }
 };
 
-// ✅ Send notification to all admins
-const notifyAllAdmins = async (req, res) => {
+/* =======================================================
+   ✅ NOTIFY ALL ADMINS
+======================================================== */
+const notifyAllAdmins = async (message, orderId = null) => {
   try {
-    const { message, type } = req.body;
-
     const admins = await User.find({ role: "admin" });
 
-    const notifications = await Promise.all(
+    await Promise.all(
       admins.map((admin) =>
         Notification.create({
           recipient: admin._id,
-          recipientModel: "User",
+          recipientModel: "User", // Admin stored as User
           message,
-          type: type || "System",
+          type: "Order",
+          orderId,
         })
       )
     );
-
-    res.status(201).json({
-      message: "Notifications sent to all admins",
-      count: notifications.length,
-    });
   } catch (error) {
     console.error("Notify all admins error:", error);
-    res.status(400).json({ message: error.message });
   }
 };
 
-// ✅ Send notification to vendor when an order is placed
-// (you can call this from orderController after creating an order)
+/* =======================================================
+   ✅ NOTIFY VENDOR ON ORDER ASSIGNMENT
+======================================================== */
 const notifyVendorOnOrder = async ({ vendorId, orderId }) => {
   try {
     await Notification.create({
       recipient: vendorId,
-      recipientModel: "Vendor",
-      message: `You have received a new order: ${orderId}`,
+      recipientModel: "User",
+      message: `📦 New order assigned: ${orderId}`,
       type: "Order",
+      orderId,
     });
   } catch (error) {
-    console.error("Notify vendor on order error:", error);
+    console.error("Notify vendor error:", error);
   }
 };
 
+/* =======================================================
+   ✅ NOTIFY CUSTOMER WHEN ORDER STATUS UPDATES
+======================================================== */
+const notifyCustomerOnStatusUpdate = async ({ customerId, status, orderId }) => {
+  try {
+    await Notification.create({
+      recipient: customerId,
+      recipientModel: "User",
+      message: `✅ Your order is now ${status}`,
+      type: "Order",
+      orderId,
+    });
+  } catch (error) {
+    console.error("Notify customer error:", error);
+  }
+};
+
+/* =======================================================
+   ✅ EXPORTS
+======================================================== */
 module.exports = {
   createNotification,
   getNotifications,
@@ -144,4 +168,5 @@ module.exports = {
   markAllMyNotificationsAsRead,
   notifyAllAdmins,
   notifyVendorOnOrder,
+  notifyCustomerOnStatusUpdate,
 };

@@ -1,160 +1,155 @@
-// controllers/orderController.js
+const asyncHandler = require("express-async-handler");
 const Order = require("../models/Order");
+const { notifyVendorOnOrder, notifyCustomerOnStatusUpdate } = require("./notificationController");
 
-// ---------- CREATE ORDER (customer checkout) ----------
-const createOrder = async (req, res) => {
-  try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: "Not authorized, no customer" });
-    }
+/* =======================================================
+   ✅ CREATE ORDER (ANY LOGGED-IN USER)
+======================================================= */
+const createOrder = asyncHandler(async (req, res) => {
+  const { products } = req.body;
 
-    const {
-      products,          // [{ product, quantity, price }]
-      shippingAddress,   // { fullName, phone, street, city, state, country, pincode }
-      paymentMethod,     // "cod" | "card" | ...
-      totalAmount,
-      orderStatus,
-    } = req.body;
-
-    if (!products || !Array.isArray(products) || products.length === 0) {
-      return res.status(400).json({ message: "No products in order" });
-    }
-
-    if (!totalAmount || totalAmount <= 0) {
-      return res.status(400).json({ message: "Invalid total amount" });
-    }
-
-    const orderData = {
-      customer: req.user._id,
-      products,
-      shippingAddress: shippingAddress || {},
-      paymentMethod: paymentMethod || "cod",
-      totalAmount,
-      orderStatus: orderStatus || "Pending",
-    };
-
-    const order = await Order.create(orderData);
-    return res.status(201).json(order);
-  } catch (error) {
-    console.error("Create order error:", error);
-    return res.status(400).json({ message: error.message });
+  if (!products || !products.length) {
+    res.status(400);
+    throw new Error("No products in the order");
   }
-};
 
-// ---------- GET ALL ORDERS (admin only) ----------
-const getOrders = async (req, res) => {
-  try {
-    const orders = await Order.find()
-      .populate("customer", "name email")
-      .populate("products.product", "name price images"); // ✅ no vendor
+  const order = await Order.create({
+    customer: req.user._id,
+    products,
+    status: "Pending",
+  });
 
-    return res.status(200).json(orders);
-  } catch (error) {
-    console.error("Get orders error:", error);
-    return res.status(400).json({ message: error.message });
+  res.status(201).json(order);
+});
+
+/* =======================================================
+   ✅ ASSIGN ORDER TO VENDOR (ADMIN ONLY)
+======================================================= */
+const assignOrderToVendor = asyncHandler(async (req, res) => {
+  const { orderId, vendorId } = req.body;
+
+  const order = await Order.findById(orderId);
+  if (!order) {
+    res.status(404);
+    throw new Error("Order not found");
   }
-};
 
-// ---------- GET MY ORDERS (logged-in customer) ----------
-const getMyOrders = async (req, res) => {
-  try {
-    if (!req.user || !req.user._id) {
-      return res.status(401).json({ message: "Not authorized" });
-    }
+  order.vendor = vendorId;
+  await order.save();
 
-    const userId = req.user._id;
+  // Notify vendor
+  await notifyVendorOnOrder({ vendorId, orderId: order._id });
 
-    const orders = await Order.find({ customer: userId })
-      .populate("products.product", "name price images")
-      .sort({ createdAt: -1 });
+  res.status(200).json(order);
+});
 
-    return res.status(200).json(orders);
-  } catch (error) {
-    console.error("Get my orders error:", error);
-    return res.status(400).json({ message: error.message });
+/* =======================================================
+   ✅ UPDATE ORDER STATUS (VENDOR / ADMIN)
+======================================================= */
+const updateOrderStatus = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+
+  const order = await Order.findById(id);
+  if (!order) {
+    res.status(404);
+    throw new Error("Order not found");
   }
-};
 
-// ---------- GET SINGLE ORDER (customer / admin) ----------
-const getSingleOrder = async (req, res) => {
-  try {
-    const orderId = req.params.id;
+  order.status = status;
+  await order.save();
 
-    if (!orderId) {
-      return res.status(400).json({ message: "Order ID is required" });
-    }
+  // Notify customer
+  await notifyCustomerOnStatusUpdate({ customerId: order.customer, status, orderId: order._id });
 
-    const order = await Order.findById(orderId)
-      .populate("customer", "name email")
-      .populate("products.product", "name price images"); // ✅ no vendor
+  res.status(200).json(order);
+});
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
+/* =======================================================
+   ✅ GET ALL ORDERS (ADMIN)
+======================================================= */
+const getOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find()
+    .sort({ createdAt: -1 })
+    .populate("customer", "-password")
+    .populate("vendor", "-password")
+    .populate("products.product");
 
-    // Only owner or admin can see it
-    if (
-      req.user.role !== "admin" &&
-      order.customer &&
-      order.customer._id.toString() !== req.user._id.toString()
-    ) {
-      return res.status(403).json({ message: "Access denied" });
-    }
+  res.status(200).json(orders);
+});
 
-    return res.status(200).json(order);
-  } catch (error) {
-    console.error("Get single order error:", error);
-    return res.status(400).json({ message: error.message });
+/* =======================================================
+   ✅ GET SINGLE ORDER BY ID (ADMIN OR CUSTOMER)
+======================================================= */
+const getOrderById = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const order = await Order.findById(id)
+    .populate("customer", "-password")
+    .populate("vendor", "-password")
+    .populate("products.product");
+
+  if (!order) {
+    res.status(404);
+    throw new Error("Order not found");
   }
-};
 
-// ---------- UPDATE ORDER STATUS (admin) ----------
-const updateOrderStatus = async (req, res) => {
-  try {
-    const { orderStatus } = req.body;
-
-    if (!orderStatus) {
-      return res.status(400).json({ message: "orderStatus is required" });
-    }
-
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      { orderStatus },
-      { new: true }
-    );
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-
-    return res.status(200).json(order);
-  } catch (error) {
-    console.error("Update order status error:", error);
-    return res.status(400).json({ message: error.message });
+  // Only admin or the customer can see this order
+  if (req.user.role !== "admin" && order.customer.toString() !== req.user._id.toString()) {
+    res.status(403);
+    throw new Error("Not authorized to view this order");
   }
-};
 
-// ---------- DELETE ORDER (admin) ----------
-const deleteOrder = async (req, res) => {
-  try {
-    const order = await Order.findByIdAndDelete(req.params.id);
+  res.status(200).json(order);
+});
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
+/* =======================================================
+   ✅ GET LOGGED-IN CUSTOMER'S ORDERS
+======================================================= */
+const getMyOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find({ customer: req.user._id })
+    .sort({ createdAt: -1 })
+    .populate("products.product")
+    .populate("vendor", "-password");
 
-    return res.status(200).json({ message: "Order deleted" });
-  } catch (error) {
-    console.error("Delete order error:", error);
-    return res.status(400).json({ message: error.message });
+  res.status(200).json(orders);
+});
+
+/* =======================================================
+   ✅ GET LOGGED-IN VENDOR'S ORDERS
+======================================================= */
+const getVendorOrders = asyncHandler(async (req, res) => {
+  const orders = await Order.find({ vendor: req.user._id })
+    .sort({ createdAt: -1 })
+    .populate("products.product")
+    .populate("customer", "-password");
+
+  res.status(200).json(orders);
+});
+
+/* =======================================================
+   ✅ DELETE ORDER (ADMIN ONLY)
+======================================================= */
+const deleteOrder = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const order = await Order.findByIdAndDelete(id);
+
+  if (!order) {
+    res.status(404);
+    throw new Error("Order not found");
   }
-};
+
+  res.status(200).json({ message: "Order deleted successfully" });
+});
 
 module.exports = {
   createOrder,
-  getOrders,
-  getMyOrders,
-  getSingleOrder,      // ✅ export added
+  assignOrderToVendor,
   updateOrderStatus,
+  getOrders,
+  getOrderById,
+  getMyOrders,
+  getVendorOrders,
   deleteOrder,
 };
