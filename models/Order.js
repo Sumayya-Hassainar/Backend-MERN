@@ -1,5 +1,19 @@
 const mongoose = require("mongoose");
 
+const trackingSchema = new mongoose.Schema({
+  status: {
+    type: String,
+    required: true,
+  },
+  updatedBy: {
+    type: String, // "admin", "vendor", "system"
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+});
+
 const orderSchema = new mongoose.Schema(
   {
     customer: {
@@ -16,40 +30,21 @@ const orderSchema = new mongoose.Schema(
 
     products: [
       {
-        product: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
-          required: true,
-        },
-        price: Number,
+        product: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
         quantity: Number,
       },
     ],
 
-    shippingAddress: {
-      fullName: String,
-      phone: String,
-      street: String,
-      city: String,
-      state: String,
-      country: String,
-      pincode: String,
-    },
+    totalAmount: Number,
 
-    paymentMethod: {
+    // ✅ CURRENT STATUS (taken from OrderStatus collection)
+    status: {
       type: String,
-      required: true,
+      default: "Processing",
     },
 
-    totalAmount: {
-      type: Number,
-      required: true,
-    },
-
-    orderStatus: {
-      type: String,
-      default: "Pending",
-    },
+    // ✅ FULL TRACKING
+    trackingHistory: [trackingSchema],
   },
   { timestamps: true }
 );

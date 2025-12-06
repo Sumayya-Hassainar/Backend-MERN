@@ -1,5 +1,3 @@
-// routes/orderStatusRoutes.js
-
 const express = require("express");
 const router = express.Router();
 
@@ -8,8 +6,6 @@ const {
   createOrderStatus,
   updateStatusMaster,
   deleteOrderStatus,
-
-  // ✅ New functional status updates
   updateOrderStatusByVendor,
   getOrderStatusByOrderId,
 } = require("../controllers/orderStatusController");
@@ -17,42 +13,40 @@ const {
 const { protect, adminOnly, vendorOnly } = require("../middleware/authMiddleware");
 
 /* =====================================================
-   ✅ ADMIN – STATUS MASTER CONTROL
+   ✅ ADMIN – STATUS MASTER
 ===================================================== */
 
-// ✅ GET all order statuses (Admin only)
+// ✅ Get All Status Types
 router.get("/", protect, adminOnly, getAllOrderStatuses);
 
-// ✅ CREATE new order status (Admin only)
+// ✅ Create Status
 router.post("/", protect, adminOnly, createOrderStatus);
 
-// ✅ UPDATE status master (Admin only)
+// ✅ Update Status
 router.put("/:id", protect, adminOnly, updateStatusMaster);
 
-// ✅ DELETE status (Admin only)
+// ✅ Delete Status
 router.delete("/:id", protect, adminOnly, deleteOrderStatus);
 
 /* =====================================================
-   ✅ VENDOR – UPDATE REAL ORDER STATUS
+   ✅ VENDOR – UPDATE ORDER STATUS
 ===================================================== */
 
-// ✅ Vendor updates assigned order status
-// PATCH /api/order-status/vendor/:orderId
-router.patch(
-  "/vendor/:orderId",
+// ✅ Vendor Updates Order Progress
+router.put(
+  "/vendor/:orderId/status",
   protect,
   vendorOnly,
   updateOrderStatusByVendor
 );
 
 /* =====================================================
-   ✅ CUSTOMER – GET LIVE ORDER STATUS
+   ✅ CUSTOMER – LIVE TRACKING
 ===================================================== */
 
-// ✅ Customer fetches order status
-// GET /api/order-status/order/:orderId
+// ✅ Customer View Tracking
 router.get(
-  "/order/:orderId",
+  "/customer/:orderId",
   protect,
   getOrderStatusByOrderId
 );
