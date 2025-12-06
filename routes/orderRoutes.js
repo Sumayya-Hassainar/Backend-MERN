@@ -27,7 +27,7 @@ router.get("/", protect, adminOnly, getOrders);
 router.post("/", protect, createOrder);
 
 /* ================= ASSIGN ================= */
-router.put("/assign", protect, adminOnly, assignOrderToVendor);
+router.put("/:orderId/assign", protect, adminOnly, assignOrderToVendor);
 
 /* ================= STATUS ================= */
 router.put("/:id/status", protect, updateOrderStatus);

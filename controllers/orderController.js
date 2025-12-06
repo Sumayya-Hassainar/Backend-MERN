@@ -93,18 +93,25 @@ exports.updateOrderStatus = async (req, res) => {
 /* ================= ASSIGN TO VENDOR ================= */
 exports.assignOrderToVendor = async (req, res) => {
   try {
-    const { orderId, vendorId } = req.body;
+    const { vendorId } = req.body;
 
-    const order = await Order.findById(orderId);
-    if (!order)
+    const order = await Order.findById(req.params.orderId);
+
+    if (!order) {
       return res.status(404).json({ message: "Order not found" });
+    }
 
     order.vendor = vendorId;
+    order.status = "Assigned";
+
     await order.save();
 
-    res.status(200).json(order);
-  } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(200).json({
+      message: "Order assigned successfully",
+      order,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 
