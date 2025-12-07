@@ -11,7 +11,11 @@ const {
   deleteOrder,
 } = require("../controllers/orderController");
 
-const { protect, adminOnly, vendorOnly } = require("../middleware/authMiddleware");
+const {
+  protect,
+  adminOnly,
+  vendorOnly,
+} = require("../middleware/authMiddleware");
 
 /* ================= CUSTOMER ================= */
 

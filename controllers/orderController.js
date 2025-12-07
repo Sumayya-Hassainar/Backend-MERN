@@ -1,4 +1,5 @@
 const Order = require("../models/Order");
+const Product = require("../models/Product");
 
 /* ================= CREATE ORDER (CUSTOMER) ================= */
 exports.createOrder = async (req, res) => {
@@ -9,19 +10,23 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ message: "No products in order" });
     }
 
-    // ✅ AUTO-ASSIGN VENDOR FROM FIRST PRODUCT
-    const assignedVendor = products[0].vendor;
+    // ✅ SAFELY FETCH VENDOR FROM FIRST PRODUCT
+    const firstProduct = await Product.findById(products[0].product);
+
+    if (!firstProduct || !firstProduct.vendor) {
+      return res.status(400).json({ message: "Vendor not found for product" });
+    }
+
+    const assignedVendor = firstProduct.vendor;
 
     const order = await Order.create({
       customer: req.user._id,
-      vendor: assignedVendor, // ✅✅✅ THIS IS THE FIX
+      vendor: assignedVendor,
       products,
       shippingAddress,
       paymentMethod,
       totalAmount,
-
       orderStatus: "Pending",
-
       trackingHistory: [
         {
           status: "Pending",
@@ -32,6 +37,7 @@ exports.createOrder = async (req, res) => {
 
     res.status(201).json(order);
   } catch (err) {
+    console.error("CREATE ORDER ERROR:", err);
     res.status(400).json({ message: err.message });
   }
 };
@@ -65,7 +71,7 @@ exports.getOrders = async (req, res) => {
   }
 };
 
-/* ================= VENDOR: MY ASSIGNED ORDERS ================= */
+/* ================= VENDOR: MY ORDERS ================= */
 exports.getVendorOrders = async (req, res) => {
   try {
     const orders = await Order.find({ vendor: req.user._id })
@@ -95,8 +101,6 @@ exports.getOrderById = async (req, res) => {
   }
 };
 
-
-
 /* ================= ADMIN: ASSIGN ORDER TO VENDOR ================= */
 exports.assignOrderToVendor = async (req, res) => {
   try {
@@ -108,11 +112,12 @@ exports.assignOrderToVendor = async (req, res) => {
     }
 
     const order = await Order.findById(orderId);
+
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    order.vendor = vendorId; //✅✅ THIS IS WHAT YOUR VENDOR QUERY NEEDS
+    order.vendor = vendorId;
     order.orderStatus = "Assigned";
 
     order.trackingHistory.push({
