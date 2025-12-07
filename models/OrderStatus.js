@@ -1,23 +1,28 @@
 const mongoose = require("mongoose");
 
-const orderStatusSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    enum: [
-      "Processing",
-      "Packed",
-      "Shipped",
-      "Delivered",
-      "Cancelled",
-      "Returned",
-      "Refunded",
-    ],
+const orderStatusSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    description: {
+      type: String,
+      default: "",
+    },
+    role: {
+      type: String,
+      enum: ["vendor", "admin"],
+      default: "vendor",
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
   },
-  description: String,
-  createdAt: { type: Date, default: Date.now },
-});
+  { timestamps: true }
+);
 
-const OrderStatus = mongoose.model("OrderStatus", orderStatusSchema);
-
-module.exports = OrderStatus;
+module.exports = mongoose.model("OrderStatus", orderStatusSchema);

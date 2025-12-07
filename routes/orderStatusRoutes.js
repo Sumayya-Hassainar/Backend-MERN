@@ -3,51 +3,44 @@ const router = express.Router();
 
 const {
   getAllOrderStatuses,
-  createOrderStatus,
   updateStatusMaster,
   deleteOrderStatus,
+  createOrderStatusByVendor,
   updateOrderStatusByVendor,
   getOrderStatusByOrderId,
 } = require("../controllers/orderStatusController");
 
-const { protect, adminOnly, vendorOnly } = require("../middleware/authMiddleware");
+const { adminOnly, vendorOnly, customerOnly } = require("../middleware/authMiddleware");
 
-/* =====================================================
-   ✅ ADMIN – STATUS MASTER
-===================================================== */
+/* ================= ADMIN ROUTES ================= */
 
-// ✅ Get All Status Types
-router.get("/", protect, adminOnly, getAllOrderStatuses);
+// ✅ Admin - View all statuses
+router.get("/", adminOnly, getAllOrderStatuses);
 
-// ✅ Create Status
-router.post("/", protect, adminOnly, createOrderStatus);
+// ✅ Admin - Update status master
+router.put("/:id", adminOnly, updateStatusMaster);
 
-// ✅ Update Status
-router.put("/:id", protect, adminOnly, updateStatusMaster);
+// ✅ Admin - Delete status
+router.delete("/:id", adminOnly, deleteOrderStatus);
 
-// ✅ Delete Status
-router.delete("/:id", protect, adminOnly, deleteOrderStatus);
+/* ================= VENDOR ROUTES ================= */
 
-/* =====================================================
-   ✅ VENDOR – UPDATE ORDER STATUS
-===================================================== */
+// ✅ Vendor - Create new status
+router.post("/vendor", vendorOnly, createOrderStatusByVendor);
 
-// ✅ Vendor Updates Order Progress
-router.put(
+// ✅ Vendor - Update order status
+router.patch(
   "/vendor/:orderId/status",
-  protect,
   vendorOnly,
   updateOrderStatusByVendor
 );
 
-/* =====================================================
-   ✅ CUSTOMER – LIVE TRACKING
-===================================================== */
+/* ================= CUSTOMER ROUTES ================= */
 
-// ✅ Customer View Tracking
+// ✅ Customer - Track order status
 router.get(
   "/customer/:orderId",
-  protect,
+  customerOnly,
   getOrderStatusByOrderId
 );
 

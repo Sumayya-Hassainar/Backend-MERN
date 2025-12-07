@@ -2,10 +2,10 @@ const OrderStatus = require("../models/OrderStatus");
 const Order = require("../models/Order");
 
 /* =====================================================
-   ✅ ADMIN – STATUS MASTER CONTROL
+   ✅ ADMIN – VIEW & UPDATE STATUS MASTER
 ===================================================== */
 
-// ✅ GET all order status types
+// ✅ Admin - View all statuses
 exports.getAllOrderStatuses = async (req, res) => {
   try {
     const statuses = await OrderStatus.find().sort({ createdAt: 1 });
@@ -15,40 +15,7 @@ exports.getAllOrderStatuses = async (req, res) => {
   }
 };
 
-// ✅ CREATE new status
-exports.createOrderStatus = async (req, res) => {
-  try {
-    const { name, description } = req.body;
-
-    if (!name)
-      return res.status(400).json({ message: "Name is required" });
-
-    const allowed = [
-      "Pending",
-      "Assigned",
-      "Packed",
-      "Shipped",
-      "Out for Delivery",
-      "Delivered",
-      "Cancelled",
-      "Returned",
-      "Refunded",
-    ];
-
-    if (!allowed.includes(name)) {
-      return res.status(400).json({
-        message: `Invalid status. Allowed: ${allowed.join(", ")}`,
-      });
-    }
-
-    const status = await OrderStatus.create({ name, description });
-    res.status(201).json(status);
-  } catch (error) {
-    res.status(500).json({ message: "Failed to create order status" });
-  }
-};
-
-// ✅ UPDATE status master
+// ✅ Admin - Update status master
 exports.updateStatusMaster = async (req, res) => {
   try {
     const { name, description } = req.body;
@@ -72,7 +39,7 @@ exports.updateStatusMaster = async (req, res) => {
   }
 };
 
-// ✅ DELETE status master
+// ✅ Admin - Delete status (Optional)
 exports.deleteOrderStatus = async (req, res) => {
   try {
     const status = await OrderStatus.findByIdAndDelete(req.params.id);
@@ -87,24 +54,42 @@ exports.deleteOrderStatus = async (req, res) => {
 };
 
 /* =====================================================
-   ✅ VENDOR – UPDATE REAL ORDER STATUS
+   ✅ VENDOR – CREATE STATUS & UPDATE ORDER STATUS
 ===================================================== */
 
+// ✅ Vendor - Create new status
+exports.createOrderStatusByVendor = async (req, res) => {
+  try {
+    const { name, description } = req.body;
+
+    if (!name)
+      return res.status(400).json({ message: "Status name is required" });
+
+    const exists = await OrderStatus.findOne({ name });
+    if (exists)
+      return res.status(400).json({ message: "Status already exists" });
+
+    const status = await OrderStatus.create({
+      name,
+      description,
+      createdBy: req.user._id,
+      role: "vendor",
+    });
+
+    res.status(201).json(status);
+  } catch (error) {
+    res.status(500).json({ message: "Vendor failed to create status" });
+  }
+};
+
+// ✅ Vendor - Update real order status
 exports.updateOrderStatusByVendor = async (req, res) => {
   try {
     const { status } = req.body;
     const { orderId } = req.params;
 
-    const allowedStatuses = [
-      "Packed",
-      "Shipped",
-      "Out for Delivery",
-      "Delivered",
-    ];
-
-    if (!allowedStatuses.includes(status)) {
-      return res.status(400).json({ message: "Invalid status update" });
-    }
+    if (!status)
+      return res.status(400).json({ message: "Status is required" });
 
     const order = await Order.findById(orderId);
     if (!order)
@@ -115,7 +100,6 @@ exports.updateOrderStatusByVendor = async (req, res) => {
     }
 
     order.orderStatus = status;
-
     order.trackingHistory.push({
       status,
       updatedBy: "vendor",
@@ -124,7 +108,7 @@ exports.updateOrderStatusByVendor = async (req, res) => {
     await order.save();
 
     res.json({
-      message: "Status updated successfully",
+      message: "Order status updated successfully",
       order,
     });
   } catch (error) {

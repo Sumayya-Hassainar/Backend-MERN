@@ -7,7 +7,6 @@ const {
   getOrders,
   getVendorOrders,
   getOrderById,
-  updateOrderStatus,
   assignOrderToVendor,
   deleteOrder,
 } = require("../controllers/orderController");
@@ -42,8 +41,5 @@ router.delete("/:id", protect, adminOnly, deleteOrder);
 
 // ✅ Get Single Order (Customer, Vendor, Admin)
 router.get("/:id", protect, getOrderById);
-
-// ✅ (Optional) Admin can force update status
-router.put("/:id/status", protect, adminOnly, updateOrderStatus);
 
 module.exports = router;
