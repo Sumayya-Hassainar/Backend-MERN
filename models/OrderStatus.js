@@ -4,8 +4,6 @@ const orderStatusSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
-      unique: true,
       trim: true,
     },
     description: {
@@ -20,6 +18,17 @@ const orderStatusSchema = new mongoose.Schema(
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      required: true,
+    },
+    customer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    order: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      required: true,
     },
   },
   { timestamps: true }
