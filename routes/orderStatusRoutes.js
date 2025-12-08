@@ -10,36 +10,40 @@ const {
   getOrderStatusByOrderId,
 } = require("../controllers/orderStatusController");
 
-const { adminOnly, vendorOnly, customerOnly } = require("../middleware/authMiddleware");
+const {
+  protect,
+  adminOnly,
+  vendorOnly,
+  customerOnly,
+} = require("../middleware/authMiddleware");
 
 /* ================= ADMIN ROUTES ================= */
+// Admin - View all statuses
+router.get("/", protect, adminOnly, getAllOrderStatuses);
 
-// ✅ Admin - View all statuses
-router.get("/", adminOnly, getAllOrderStatuses);
+// Admin - Update status master
+router.put("/:id", protect, adminOnly, updateStatusMaster);
 
-// ✅ Admin - Update status master
-router.put("/:id", adminOnly, updateStatusMaster);
-
-// ✅ Admin - Delete status
-router.delete("/:id", adminOnly, deleteOrderStatus);
+// Admin - Delete status
+router.delete("/:id", protect, adminOnly, deleteOrderStatus);
 
 /* ================= VENDOR ROUTES ================= */
+// Vendor - Create new status (if needed)
+router.post("/vendor", protect, vendorOnly, createOrderStatusByVendor);
 
-// ✅ Vendor - Create new status
-router.post("/vendor", vendorOnly, createOrderStatusByVendor);
-
-// ✅ Vendor - Update order status
+// Vendor - Update order status
 router.patch(
   "/vendor/:orderId/status",
+  protect,
   vendorOnly,
   updateOrderStatusByVendor
 );
 
 /* ================= CUSTOMER ROUTES ================= */
-
-// ✅ Customer - Track order status
+// Customer - Track order
 router.get(
   "/customer/:orderId",
+  protect,
   customerOnly,
   getOrderStatusByOrderId
 );

@@ -5,41 +5,40 @@ const Order = require("../models/Order");
    ✅ ADMIN – VIEW & UPDATE STATUS MASTER
 ===================================================== */
 
-// ✅ Admin - View all statuses
+// Admin - Get all order statuses
 exports.getAllOrderStatuses = async (req, res) => {
   try {
-    const statuses = await OrderStatus.find().sort({ createdAt: 1 });
-    res.json(statuses);
+    const statuses = await OrderStatus.find().sort({ name: 1 });
+    res.status(200).json(statuses);
   } catch (error) {
+    console.error("Order Status Controller Error:", error);
     res.status(500).json({ message: "Failed to fetch order statuses" });
   }
 };
 
-// ✅ Admin - Update status master
+// Admin - Update status master
 exports.updateStatusMaster = async (req, res) => {
   try {
     const { name, description } = req.body;
-
     const update = {};
     if (name) update.name = name;
     if (description !== undefined) update.description = description;
 
-    const status = await OrderStatus.findByIdAndUpdate(
-      req.params.id,
-      update,
-      { new: true }
-    );
+    const status = await OrderStatus.findByIdAndUpdate(req.params.id, update, {
+      new: true,
+    });
 
     if (!status)
       return res.status(404).json({ message: "Order status not found" });
 
     res.json(status);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Failed to update order status" });
   }
 };
 
-// ✅ Admin - Delete status (Optional)
+// Admin - Delete status
 exports.deleteOrderStatus = async (req, res) => {
   try {
     const status = await OrderStatus.findByIdAndDelete(req.params.id);
@@ -49,6 +48,7 @@ exports.deleteOrderStatus = async (req, res) => {
 
     res.json({ message: "Order status deleted successfully" });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Failed to delete order status" });
   }
 };
@@ -57,11 +57,10 @@ exports.deleteOrderStatus = async (req, res) => {
    ✅ VENDOR – CREATE STATUS & UPDATE ORDER STATUS
 ===================================================== */
 
-// ✅ Vendor - Create new status
+// Vendor - Create new status
 exports.createOrderStatusByVendor = async (req, res) => {
   try {
     const { name, description } = req.body;
-
     if (!name)
       return res.status(400).json({ message: "Status name is required" });
 
@@ -78,11 +77,12 @@ exports.createOrderStatusByVendor = async (req, res) => {
 
     res.status(201).json(status);
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Vendor failed to create status" });
   }
 };
 
-// ✅ Vendor - Update real order status
+// Vendor - Update real order status
 exports.updateOrderStatusByVendor = async (req, res) => {
   try {
     const { status } = req.body;
@@ -103,15 +103,14 @@ exports.updateOrderStatusByVendor = async (req, res) => {
     order.trackingHistory.push({
       status,
       updatedBy: "vendor",
+      updatedAt: new Date(),
     });
 
     await order.save();
 
-    res.json({
-      message: "Order status updated successfully",
-      order,
-    });
+    res.json({ message: "Order status updated successfully", order });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Vendor status update failed" });
   }
 };
@@ -140,6 +139,7 @@ exports.getOrderStatusByOrderId = async (req, res) => {
       trackingHistory: order.trackingHistory,
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Failed to fetch order status" });
   }
 };
