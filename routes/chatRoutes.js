@@ -1,17 +1,19 @@
-// routes/chatRoutes.js
 const express = require("express");
 const router = express.Router();
 const { protect } = require("../middleware/authMiddleware");
-const { getChats, createChat, sendMessage } = require("../controllers/chatController");
+const { 
+  getChats,
+  createChat,
+  sendMessageWithAI
+} = require("../controllers/chatController");
 
-// Get all chats for the logged-in user
+// GET ALL CHATS
 router.get("/", protect, getChats);
 
-// Create a new chat (customer initiates)
+// CREATE CHAT FOR ORDER
 router.post("/", protect, createChat);
 
-// Send a message in a chat
-router.post("/:chatId/message", protect, sendMessage);
+// SEND MESSAGE + AI RESPONSE
+router.post("/:chatId/message", protect, sendMessageWithAI);
 
 module.exports = router;
-

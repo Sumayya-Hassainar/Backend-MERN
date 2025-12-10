@@ -1,63 +1,92 @@
-// controllers/chatController.js
 const Chat = require("../models/Chat");
+const Message = require("../models/Message");
+const { HfInference } = require("@huggingface/inference");
 
-// Get all chats for the logged-in user (customer or vendor)
-const getChats = async (req, res) => {
+// Initialize HuggingFace
+const hf = new HfInference(process.env.HF_API_KEY);
+const AI_MODEL = "EleutherAI/gpt-neo-125M";
+
+// -------------------- GET CHATS --------------------
+exports.getChats = async (req, res) => {
   try {
-    const isVendor = req.user.role === "vendor";
-
-    const chats = await Chat.find(isVendor ? { vendor: req.user._id } : { customer: req.user._id })
-      .populate("customer", "name email")
-      .populate("vendor", "name email")
+    const chats = await Chat.find({ user: req.user._id })
+      .populate("messages")
       .sort({ updatedAt: -1 });
 
-    res.status(200).json(chats);
+    res.json(chats);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch chats" });
+    res.status(500).json({ message: "Failed to load chats" });
   }
 };
 
-// Create a new chat (if no chat exists between customer and vendor)
-const createChat = async (req, res) => {
-  const { vendorId } = req.body;
-  if (!vendorId) return res.status(400).json({ message: "Vendor ID is required" });
-
+// -------------------- CREATE CHAT --------------------
+exports.createChat = async (req, res) => {
   try {
-    // Check if chat already exists
-    let chat = await Chat.findOne({ customer: req.user._id, vendor: vendorId });
-    if (!chat) {
-      chat = new Chat({ customer: req.user._id, vendor: vendorId, messages: [] });
-      await chat.save();
-    }
-    res.status(200).json(chat);
+    const { orderId } = req.body;
+
+    const chat = await Chat.create({
+      user: req.user._id,
+      orderId,
+    });
+
+    res.json(chat);
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Failed to create chat" });
   }
 };
 
-// Send a message in a chat
-const sendMessage = async (req, res) => {
-  const { chatId } = req.params;
-  const { content } = req.body;
-
-  if (!content) return res.status(400).json({ message: "Message content is required" });
-
+// -------------------- SEND MESSAGE + AI --------------------
+exports.sendMessageWithAI = async (req, res) => {
   try {
-    const chat = await Chat.findById(chatId);
-    if (!chat) return res.status(404).json({ message: "Chat not found" });
+    const { chatId } = req.params;
+    const { content } = req.body;
 
-    const sender = req.user.role === "vendor" ? "vendor" : "customer";
+    if (!content) {
+      return res.status(400).json({ message: "Message content is required" });
+    }
 
-    chat.messages.push({ sender, content });
-    await chat.save();
+    // Save user message
+    const userMsg = await Message.create({
+      chatId,
+      sender: req.user._id,
+      content,
+      type: "user"
+    });
 
-    res.status(200).json(chat);
+    // Call HuggingFace
+    let aiResponse = { generated_text: "AI not available" };
+
+    try {
+      aiResponse = await hf.textGeneration({
+        model: AI_MODEL,
+        inputs: content,
+        max_new_tokens: 150,
+      });
+    } catch (err) {
+      console.warn("AI ERROR:", err.message);
+    }
+
+    const aiText = Array.isArray(aiResponse)
+      ? aiResponse[0]?.generated_text
+      : aiResponse?.generated_text;
+
+    // Save AI message
+    const aiMsg = await Message.create({
+      chatId,
+      sender: null, // system
+      content: aiText || "I'm here to help!",
+      type: "ai"
+    });
+
+    // Update Chat time
+    await Chat.findByIdAndUpdate(chatId, { updatedAt: Date.now() });
+
+    res.json({
+      userMessage: userMsg,
+      aiMessage: aiMsg
+    });
+
   } catch (err) {
-    console.error(err);
     res.status(500).json({ message: "Failed to send message" });
   }
 };
-
-module.exports = { getChats, createChat, sendMessage };

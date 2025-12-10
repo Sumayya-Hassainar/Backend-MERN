@@ -30,5 +30,5 @@ router.use("/customer", customerRoutes);
 router.use("/admin", adminRoutes);
 router.use("/order-statuses", orderStatusRoutes);
 router.use("/account", accountRoutes); 
-router.use("chat",chatRoutes)            
+router.use("chats",chatRoutes)            
 module.exports = router;
