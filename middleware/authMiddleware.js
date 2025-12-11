@@ -1,12 +1,16 @@
 // middleware/authMiddleware.js
 const jwt = require("jsonwebtoken");
 const asyncHandler = require("express-async-handler");
+
 const User = require("../models/User");
 const Vendor = require("../models/Vendor");
 const Admin = require("../models/Admin");
 
+// ------------------- PROTECT MIDDLEWARE -------------------
 const protect = asyncHandler(async (req, res, next) => {
   let token;
+
+  // Check Authorization header or cookies
   if (req.headers.authorization?.startsWith("Bearer")) {
     token = req.headers.authorization.split(" ")[1];
   } else if (req.cookies?.token) {
@@ -25,29 +29,40 @@ const protect = asyncHandler(async (req, res, next) => {
   const { id, role } = decoded;
   if (!id || !role) return res.status(401).json({ message: "Invalid token payload" });
 
-  // Attach user record according to role
-  let userDoc = null;
-  if (role === "admin") userDoc = await Admin.findById(id).select("-password");
-  else if (role === "vendor") userDoc = await Vendor.findById(id).select("-password");
-  else userDoc = await User.findById(id).select("-password");
+  // Fetch the correct model based on role
+  let userDoc;
+  switch (role) {
+    case "admin":
+      userDoc = await Admin.findById(id).select("-password");
+      break;
+    case "vendor":
+      userDoc = await Vendor.findById(id).select("-password");
+      break;
+    case "customer":
+      userDoc = await User.findById(id).select("-password");
+      break;
+    default:
+      return res.status(401).json({ message: "Invalid role" });
+  }
 
   if (!userDoc) return res.status(401).json({ message: "User not found" });
 
-  // canonical req.user object for controllers (keep role)
+  // Attach user object with role to req
   req.user = { ...userDoc.toObject(), role };
   next();
 });
 
-const roleGuard = (allowed = []) =>
-  (req, res, next) => {
-    if (!req.user) return res.status(401).json({ message: "Not authenticated" });
-    if (!allowed.includes(req.user.role)) return res.status(403).json({ message: "Access denied" });
-    next();
-  };
-
-module.exports = {
-  protect,
-  adminOnly: roleGuard(["admin"]),
-  vendorOnly: roleGuard(["vendor"]),
-  customerOnly: roleGuard(["customer"]),
+// ------------------- ROLE GUARD -------------------
+const roleGuard = (allowedRoles = []) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ message: "Not authenticated" });
+  if (!allowedRoles.includes(req.user.role))
+    return res.status(403).json({ message: "Access denied" });
+  next();
 };
+
+// Shortcuts
+const adminOnly = roleGuard(["admin"]);
+const vendorOnly = roleGuard(["vendor"]);
+const customerOnly = roleGuard(["customer"]);
+
+module.exports = { protect, adminOnly, vendorOnly, customerOnly };
