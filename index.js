@@ -35,7 +35,7 @@ app.use(
 );
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// ------------------ SAFE HUGGING FACE LOAD ------------------
+// ------------------ HUGGINGFACE AI SETUP ------------------
 let HfInference;
 let hfClient = null;
 
@@ -51,13 +51,11 @@ try {
   console.warn("⚠️ HuggingFace SDK not installed. AI chat disabled.");
 }
 
-// ------------------ SUPPORTED AI MODEL ------------------
-const AI_MODEL = "EleutherAI/gpt-neo-125M"; // Free-key compatible
+// ------------------ AI MODEL CONFIG ------------------
+const AI_MODEL = "EleutherAI/gpt-neo-125M";
 
 // ------------------ HEALTH CHECK ------------------
-app.get("/", (req, res) => {
-  res.send("Welcome to my backend app");
-});
+app.get("/", (req, res) => res.send("Welcome to my backend app"));
 
 // ------------------ API ROUTES ------------------
 app.use("/api", Routes);
@@ -90,11 +88,9 @@ app.post("/api/ai-chat", async (req, res) => {
 });
 
 // ------------------ 404 HANDLER ------------------
-app.use((req, res) => {
-  res.status(404).json({ message: "Route not found" });
-});
+app.use((req, res) => res.status(404).json({ message: "Route not found" }));
 
-// ------------------ ERROR HANDLER ------------------
+// ------------------ GLOBAL ERROR HANDLER ------------------
 app.use((err, req, res, next) => {
   console.error("🔥 SERVER ERROR:", err);
   res.status(err.status || 500).json({ message: err.message || "Server error" });
@@ -103,3 +99,10 @@ app.use((err, req, res, next) => {
 // ------------------ START SERVER ------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
+/*
+⚠️ NOTE FOR LOCAL DEVELOPMENT:
+- If you are seeing SSL errors in Postman or frontend (EPROTO / WRONG_VERSION_NUMBER),
+  make sure to use `http://localhost:${PORT}` instead of `https://`.
+- HTTPS requires SSL certificate configuration (self-signed or valid certificate).
+*/

@@ -15,14 +15,13 @@ const createOrder = asyncHandler(async (req, res) => {
 // ================= GET MY ORDERS (Customer) =================
 const getMyOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ user: req.user._id })
-      .populate("products.productId", "title price image")     // product details
-      .populate("shippingAddress")                             // address
-      .populate("vendor", "shopName email")                    // vendor info
+    const orders = await Order.find({ customer: req.user._id })
+      .populate("products.product", "title price image")
+      .populate("vendor", "shopName email")
+      .populate("shippingAddress")
       .sort({ createdAt: -1 });
 
     res.json(orders);
-
   } catch (error) {
     console.error("My Orders Error:", error);
     res.status(500).json({ message: "Failed to load orders" });
