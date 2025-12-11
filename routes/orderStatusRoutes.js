@@ -1,51 +1,23 @@
 const express = require("express");
 const router = express.Router();
+const ctrl = require("../controllers/orderStatusController");
+const { protect, vendorOnly, customerOnly } = require("../middleware/authMiddleware");
 
-const {
-  getAllOrderStatuses,
-  updateStatusMaster,
-  deleteOrderStatus,
-  createOrderStatusByVendor,
-  updateOrderStatusByVendor,
-  getOrderStatusByOrderId,
-} = require("../controllers/orderStatusController");
+/* ================= VENDOR ONLY ================= */
+// Vendor creates a new status
+router.post("/", protect, vendorOnly, ctrl.createStatus);
 
-const {
-  protect,
-  adminOnly,
-  vendorOnly,
-  customerOnly,
-} = require("../middleware/authMiddleware");
+// Vendor updates a status
+router.put("/:statusId", protect, vendorOnly, ctrl.updateStatus);
 
-/* ================= ADMIN ROUTES ================= */
-// Admin - View all statuses
-router.get("/", protect, adminOnly, getAllOrderStatuses);
+// Vendor deletes a status
+router.delete("/:statusId", protect, vendorOnly, ctrl.deleteStatus);
 
-// Admin - Update status master
-router.put("/:id", protect, adminOnly, updateStatusMaster);
+/* ================= UNIVERSAL ================= */
+// Get all statuses for a specific order (Vendor/Admin/Customer)
+router.get("/order/:orderId", protect, ctrl.getStatuses);
 
-// Admin - Delete status
-router.delete("/:id", protect, adminOnly, deleteOrderStatus);
-
-/* ================= VENDOR ROUTES ================= */
-// Vendor - Create new status (if needed)
-router.post("/vendor", protect, vendorOnly, createOrderStatusByVendor);
-
-// Vendor - Update order status
-router.patch(
-  "/vendor/:orderId/status",
-  protect,
-  vendorOnly,
-  updateOrderStatusByVendor
-);
-
-/* ================= CUSTOMER ROUTES ================= */
-// Customer - Track order
-router.get(
-  "/customer/:orderId",
-  protect,
-  customerOnly,
-  getOrderStatusByOrderId
-);
+// Customer tracking for a single order
+router.get("/track/:orderId", protect, customerOnly, ctrl.getOrderTracking);
 
 module.exports = router;

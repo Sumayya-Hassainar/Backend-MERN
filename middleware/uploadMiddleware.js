@@ -1,43 +1,32 @@
 // middleware/uploadProductImages.js
+
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const { CloudinaryStorage } = require("multer-storage-cloudinary");
+const cloudinary = require("../config/cloudinary");
 
-// ensure folder exists: /uploads/products
-const uploadPath = path.join(__dirname, "..", "uploads", "products");
-if (!fs.existsSync(uploadPath)) {
-  fs.mkdirSync(uploadPath, { recursive: true });
-}
+// Allowed image formats
+const ALLOWED_FORMATS = ["jpg", "jpeg", "png", "webp"];
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname); // .jpg, .png
-    const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-    cb(null, uniqueName);
+// Cloudinary storage configuration
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "products", // Cloudinary folder name
+    allowed_formats: ALLOWED_FORMATS,
+    resource_type: "image",
+    transformation: [{ width: 800, crop: "limit" }],
   },
 });
 
-const fileFilter = (req, file, cb) => {
-  const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-  if (allowed.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error("Only image files (jpg, png, webp) are allowed"), false);
-  }
-};
-
+// Multer instance
 const upload = multer({
   storage,
-  fileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB per file
+    fileSize: 5 * 1024 * 1024, // 5MB
   },
 });
 
-// 👇 allow up to 4 images per product, field name: "images"
+// 👉 Allow up to 4 images per product
 const uploadProductImages = upload.array("images", 4);
 
 module.exports = uploadProductImages;
