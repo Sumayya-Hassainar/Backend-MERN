@@ -1,59 +1,114 @@
-const asyncHandler = require("express-async-handler");
 const OrderStatus = require("../models/OrderStatus");
+const Order = require("../models/Order");
 
-// ================= CREATE STATUS =================
-const createStatus = asyncHandler(async (req, res) => {
-  const { name, description } = req.body;
-  if (!name?.trim()) {
-    res.status(400);
-    throw new Error("Status name is required");
+/* ================= CREATE STATUS (Vendor Only) ================= */
+exports.createStatus = async (req, res) => {
+  try {
+    const { orderId, status, description } = req.body;
+    if (!orderId || !status) {
+      return res.status(400).json({ message: "orderId and status are required" });
+    }
+
+    // Ensure the vendor owns the order
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+    if (order.vendor.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const newStatus = await OrderStatus.create({
+      order: orderId,
+      status,
+      description,
+      createdBy: req.user._id,
+    });
+
+    res.status(201).json({ success: true, status: newStatus });
+  } catch (err) {
+    console.error("Create Status Error:", err);
+    res.status(500).json({ message: "Failed to create status" });
   }
+};
 
-  const status = await OrderStatus.create({
-    name: name.trim(),
-    description: description || "",
-    createdBy: req.user._id,
-  });
+/* ================= UPDATE STATUS (Vendor Only) ================= */
+exports.updateStatus = async (req, res) => {
+  try {
+    const { statusId } = req.params;
+    const { status, description } = req.body;
 
-  res.status(201).json({ message: "Status created", status });
-});
+    const existing = await OrderStatus.findById(statusId);
+    if (!existing) return res.status(404).json({ message: "Status not found" });
 
-// ================= UPDATE STATUS =================
-const updateStatus = asyncHandler(async (req, res) => {
-  const { statusId } = req.params;
-  const { name, description } = req.body;
+    if (existing.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
-  const status = await OrderStatus.findById(statusId);
-  if (!status) {
-    res.status(404);
-    throw new Error("Status not found");
+    existing.status = status || existing.status;
+    existing.description = description || existing.description;
+    await existing.save();
+
+    res.json({ success: true, status: existing });
+  } catch (err) {
+    console.error("Update Status Error:", err);
+    res.status(500).json({ message: "Failed to update status" });
   }
+};
 
-  if (name?.trim()) status.name = name.trim();
-  if (description !== undefined) status.description = description;
+/* ================= DELETE STATUS (Vendor Only) ================= */
+exports.deleteStatus = async (req, res) => {
+  try {
+    const { statusId } = req.params;
 
-  await status.save();
-  res.json({ message: "Status updated", status });
-});
+    const existing = await OrderStatus.findById(statusId);
+    if (!existing) return res.status(404).json({ message: "Status not found" });
 
-// ================= DELETE STATUS =================
-const deleteStatus = asyncHandler(async (req, res) => {
-  const { statusId } = req.params;
+    if (existing.createdBy.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
 
-  const status = await OrderStatus.findById(statusId);
-  if (!status) {
-    res.status(404);
-    throw new Error("Status not found");
+    await OrderStatus.findByIdAndDelete(statusId);
+    res.json({ success: true, message: "Status deleted" });
+  } catch (err) {
+    console.error("Delete Status Error:", err);
+    res.status(500).json({ message: "Failed to delete status" });
   }
+};
 
-  await status.remove();
-  res.json({ message: "Status deleted" });
-});
+/* ================= GET STATUSES FOR ORDER (Universal) ================= */
+exports.getStatuses = async (req, res) => {
+  try {
+    const { orderId } = req.params;
 
-// ================= GET ALL STATUSES =================
-const getStatuses = asyncHandler(async (req, res) => {
-  const statuses = await OrderStatus.find().sort({ createdAt: -1 });
-  res.json(statuses);
-});
+    const statuses = await OrderStatus.find({ order: orderId })
+      .sort({ createdAt: 1 })
+      .populate("createdBy", "name email");
 
-module.exports = { createStatus, updateStatus, deleteStatus, getStatuses };
+    res.json({ success: true, statuses });
+  } catch (err) {
+    console.error("Get Statuses Error:", err);
+    res.status(500).json({ message: "Failed to fetch statuses" });
+  }
+};
+
+/* ================= CUSTOMER TRACKING ================= */
+exports.getOrderTracking = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await Order.findById(orderId);
+    if (!order) return res.status(404).json({ message: "Order not found" });
+
+    if (order.customer.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    const statuses = await OrderStatus.find({ order: orderId })
+      .sort({ createdAt: 1 })
+      .populate("createdBy", "name");
+
+    res.json({ success: true, order: order, statuses });
+  } catch (err) {
+    console.error("Get Order Tracking Error:", err);
+    res.status(500).json({ message: "Failed to fetch tracking info" });
+  }
+};
