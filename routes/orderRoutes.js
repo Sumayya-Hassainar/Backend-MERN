@@ -11,31 +11,35 @@ const {
   deleteOrder,
 } = require("../controllers/orderController");
 
-const { protect, adminOnly, vendorOnly } = require("../middleware/authMiddleware");
+const {
+  protect,
+  adminOnly,
+  vendorOnly,
+} = require("../middleware/authMiddleware");
 
 /* ================= CUSTOMER ================= */
-// Create a new order
+// Create new order
 router.post("/", protect, createOrder);
 
-// Get orders for logged-in customer
+// Get logged-in customer orders (IMPORTANT: keep ABOVE admin "/")
 router.get("/myorders", protect, getMyOrders);
 
 /* ================= VENDOR ================= */
-// Get orders assigned to vendor
+// Vendor sees orders assigned to them
 router.get("/vendor", protect, vendorOnly, getVendorOrders);
 
 /* ================= ADMIN ================= */
-// Admin gets all orders
+// Admin gets ALL orders
 router.get("/", protect, adminOnly, getOrders);
 
-// Admin assigns vendor to order → status becomes "Assigned"
+// Assign vendor to order
 router.put("/:orderId/assign", protect, adminOnly, assignOrderToVendor);
 
-// Admin deletes an order
+// Delete order
 router.delete("/:id", protect, adminOnly, deleteOrder);
 
 /* ================= UNIVERSAL ================= */
-// Get single order (Customer, Vendor, Admin)
+// Get single order (Customer + Vendor + Admin)
 router.get("/:id", protect, getOrderById);
 
 module.exports = router;

@@ -3,21 +3,35 @@ const mongoose = require("mongoose");
 const orderSchema = new mongoose.Schema(
   {
     customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    vendor: { type: mongoose.Schema.Types.ObjectId, ref: "Vendor", },
-    orderStatus: { type: String, default: "Processing" },
-    items: [
+
+    vendor: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+
+    products: [
       {
-        product: { type: mongoose.Schema.Types.ObjectId, ref: "Product" },
-        quantity: { type: Number, default: 1 },
+        product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
+        quantity: { type: Number, required: true },
+        price: { type: Number, required: true },
       },
     ],
-    trackingHistory: [
-      {
-        status: String,
-        updatedBy: String,
-        updatedAt: Date,
-      },
-    ],
+
+    shippingAddress: {
+      fullName: String,
+      phone: String,
+      street: String,
+      city: String,
+      state: String,
+      country: String,
+      pincode: String,
+    },
+
+    status: {
+      type: String,
+      default: "Processing",
+      enum: ["Processing", "Assigned", "Shipped", "Delivered", "Cancelled"],
+    },
+
+    totalAmount: { type: Number, required: true },
+    paymentMethod: { type: String, default: "cod" },
   },
   { timestamps: true }
 );
