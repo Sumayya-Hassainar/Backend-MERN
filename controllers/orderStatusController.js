@@ -1,114 +1,114 @@
+const asyncHandler = require("express-async-handler");
+const mongoose = require("mongoose");
+
 const OrderStatus = require("../models/OrderStatus");
 const Order = require("../models/Order");
 
-/* ================= CREATE STATUS (Vendor Only) ================= */
-exports.createStatus = async (req, res) => {
-  try {
-    const { orderId, status, description } = req.body;
-    if (!orderId || !status) {
-      return res.status(400).json({ message: "orderId and status are required" });
-    }
+const fail = (res, code, msg) => res.status(code).json({ success: false, message: msg });
 
-    // Ensure the vendor owns the order
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-    if (order.vendor.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
-    }
+// Allowed order statuses
+const enumStatuses = ["Pending", "Processing", "Confirmed", "Shipped", "Delivered", "Cancelled"];
 
-    const newStatus = await OrderStatus.create({
-      order: orderId,
-      status,
-      description,
-      createdBy: req.user._id,
-    });
+exports.createStatus = asyncHandler(async (req, res) => {
+  const { status, order } = req.body;
 
-    res.status(201).json({ success: true, status: newStatus });
-  } catch (err) {
-    console.error("Create Status Error:", err);
-    res.status(500).json({ message: "Failed to create status" });
-  }
-};
+  // 1️⃣ Validate input
+  if (!status || !status.trim()) return fail(res, 400, "Status is required");
+  if (!order || !mongoose.Types.ObjectId.isValid(order)) return fail(res, 400, "Valid order ID is required");
 
-/* ================= UPDATE STATUS (Vendor Only) ================= */
-exports.updateStatus = async (req, res) => {
-  try {
-    const { statusId } = req.params;
-    const { status, description } = req.body;
+  // 2️⃣ Ensure order exists
+  const orderDoc = await Order.findById(order);
+  if (!orderDoc) return fail(res, 404, "Order not found");
 
-    const existing = await OrderStatus.findById(statusId);
-    if (!existing) return res.status(404).json({ message: "Status not found" });
+  // 3️⃣ Normalize status
+  const normalizedStatus = status.trim().charAt(0).toUpperCase() + status.trim().slice(1).toLowerCase();
 
-    if (existing.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
-    }
+  // 4️⃣ Validate against allowed enum
+  if (!enumStatuses.includes(normalizedStatus))
+    return fail(res, 400, `Invalid status. Must be one of: ${enumStatuses.join(", ")}`);
 
-    existing.status = status || existing.status;
-    existing.description = description || existing.description;
-    await existing.save();
+  // 5️⃣ Prevent duplicate status for the same order
+  const exists = await OrderStatus.findOne({ order, status: normalizedStatus });
+  if (exists) return fail(res, 409, "This status already exists for this order");
 
-    res.json({ success: true, status: existing });
-  } catch (err) {
-    console.error("Update Status Error:", err);
-    res.status(500).json({ message: "Failed to update status" });
-  }
-};
+  // 6️⃣ Create the new status
+  const newStatus = await OrderStatus.create({
+    order,
+    status: normalizedStatus,
+    createdBy: req.user._id,
+    role: req.user.role,
+  });
 
-/* ================= DELETE STATUS (Vendor Only) ================= */
-exports.deleteStatus = async (req, res) => {
-  try {
-    const { statusId } = req.params;
+  // 7️⃣ Update the main order status
+  orderDoc.status = normalizedStatus;
+  await orderDoc.save();
 
-    const existing = await OrderStatus.findById(statusId);
-    if (!existing) return res.status(404).json({ message: "Status not found" });
+  res.status(201).json({ success: true, status: newStatus });
+});
 
-    if (existing.createdBy.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
-    }
+// UPDATE STATUS
+exports.updateStatus = asyncHandler(async (req, res) => {
+  const { statusId } = req.params;
+  const { status: rawStatus } = req.body;
 
-    await OrderStatus.findByIdAndDelete(statusId);
-    res.json({ success: true, message: "Status deleted" });
-  } catch (err) {
-    console.error("Delete Status Error:", err);
-    res.status(500).json({ message: "Failed to delete status" });
-  }
-};
+  if (!rawStatus || !rawStatus.trim()) return fail(res, 400, "Status is required");
+  if (!mongoose.Types.ObjectId.isValid(statusId)) return fail(res, 400, "Invalid status ID");
 
-/* ================= GET STATUSES FOR ORDER (Universal) ================= */
-exports.getStatuses = async (req, res) => {
-  try {
-    const { orderId } = req.params;
+  const statusDoc = await OrderStatus.findById(statusId);
+  if (!statusDoc) return fail(res, 404, "Status not found");
 
-    const statuses = await OrderStatus.find({ order: orderId })
-      .sort({ createdAt: 1 })
-      .populate("createdBy", "name email");
+  if (req.user.role === "vendor" && statusDoc.createdBy.toString() !== req.user._id.toString())
+    return fail(res, 403, "Not authorized");
 
-    res.json({ success: true, statuses });
-  } catch (err) {
-    console.error("Get Statuses Error:", err);
-    res.status(500).json({ message: "Failed to fetch statuses" });
-  }
-};
+  const normalizedStatus = rawStatus.trim().charAt(0).toUpperCase() + rawStatus.trim().slice(1).toLowerCase();
 
-/* ================= CUSTOMER TRACKING ================= */
-exports.getOrderTracking = async (req, res) => {
-  try {
-    const { orderId } = req.params;
+  if (!enumStatuses.includes(normalizedStatus))
+    return fail(res, 400, `Invalid status. Must be one of: ${enumStatuses.join(", ")}`);
 
-    const order = await Order.findById(orderId);
-    if (!order) return res.status(404).json({ message: "Order not found" });
+  const exists = await OrderStatus.findOne({ order: statusDoc.order, status: normalizedStatus, _id: { $ne: statusId } });
+  if (exists) return fail(res, 409, "This status already exists for this order");
 
-    if (order.customer.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: "Not authorized" });
-    }
+  statusDoc.status = normalizedStatus;
+  await statusDoc.save();
+  await Order.findByIdAndUpdate(statusDoc.order, { status: normalizedStatus });
 
-    const statuses = await OrderStatus.find({ order: orderId })
-      .sort({ createdAt: 1 })
-      .populate("createdBy", "name");
+  res.json({ success: true, message: "Status updated", status: statusDoc });
+});
 
-    res.json({ success: true, order: order, statuses });
-  } catch (err) {
-    console.error("Get Order Tracking Error:", err);
-    res.status(500).json({ message: "Failed to fetch tracking info" });
-  }
-};
+// DELETE STATUS
+exports.deleteStatus = asyncHandler(async (req, res) => {
+  const { statusId } = req.params;
+
+  if (!mongoose.Types.ObjectId.isValid(statusId)) return fail(res, 400, "Invalid status ID");
+
+  const statusDoc = await OrderStatus.findById(statusId);
+  if (!statusDoc) return fail(res, 404, "Status not found");
+
+  if (req.user.role === "vendor" && statusDoc.createdBy.toString() !== req.user._id.toString())
+    return fail(res, 403, "Not authorized");
+
+  await statusDoc.deleteOne();
+  res.json({ success: true, message: "Status deleted" });
+});
+
+// GET STATUSES BY ORDER
+exports.getStatuses = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(orderId)) return fail(res, 400, "Invalid order ID");
+
+  const statuses = await OrderStatus.find({ order: orderId }).sort({ createdAt: 1 });
+  res.json({ success: true, statuses });
+});
+
+// CUSTOMER TRACKING
+exports.getOrderTracking = asyncHandler(async (req, res) => {
+  const { orderId } = req.params;
+  if (!mongoose.Types.ObjectId.isValid(orderId)) return fail(res, 400, "Invalid order ID");
+
+  const order = await Order.findOne({ _id: orderId, customer: req.user._id });
+  if (!order) return fail(res, 404, "Order not found");
+
+  const timeline = await OrderStatus.find({ order: orderId }).sort({ createdAt: 1 });
+
+  res.json({ success: true, order: { _id: order._id, status: order.status }, timeline });
+});

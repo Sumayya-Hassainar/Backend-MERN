@@ -8,9 +8,9 @@ const orderSchema = new mongoose.Schema(
 
     products: [
       {
-        product: { type: mongoose.Schema.Types.ObjectId, ref: "Product", required: true },
-        quantity: { type: Number, required: true },
-        price: { type: Number, required: true },
+        product: { type: mongoose.Schema.Types.ObjectId, ref: "Product"},
+        quantity: { type: Number },
+        price: { type: Number },
       },
     ],
 
