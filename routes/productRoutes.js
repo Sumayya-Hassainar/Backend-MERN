@@ -1,7 +1,7 @@
-// routes/productRoutes.js
 const express = require("express");
 const router = express.Router();
-
+const { protect, vendorOnly } = require("../middleware/authMiddleware");
+const uploadProductImages = require("../middleware/uploadMiddleware");
 const {
   createProduct,
   getProducts,
@@ -11,41 +11,22 @@ const {
   deleteProduct,
 } = require("../controllers/productController");
 
-const uploadProductImages = require("../middleware/uploadMiddleware");
-const { protect, vendorOnly } = require("../middleware/authMiddleware");
+// Create product (vendor only)
+router.post("/", protect, vendorOnly, uploadProductImages, createProduct);
 
-// ---------- PUBLIC CUSTOMER ROUTES ----------
-router.get("/", getProducts);       // GET /api/products
-router.get("/:id", getProductById);  // GET /api/products/:id
+// Get my products (vendor)
+router.get("/my/products", protect, getMyProducts);
 
-// ---------- VENDOR-ONLY ROUTES ----------
-// GET /api/products/vendor/my-products?category=...
-router.get("/vendor/my-products", protect, vendorOnly, getMyProducts);
+// Get all products
+router.get("/", getProducts);
 
-// CREATE product (with multiple images) – only vendor
-router.post(
-  "/",
-  protect,
-  vendorOnly,
-  uploadProductImages,
-  createProduct
-);
+// Get product by ID
+router.get("/:id", getProductById);
 
-// UPDATE product
-router.put(
-  "/:id",
-  protect,
-  vendorOnly,
-  uploadProductImages,
-  updateProduct
-);
+// Update product
+router.put("/:id", protect, vendorOnly, uploadProductImages, updateProduct);
 
-// DELETE product
-router.delete(
-  "/:id",
-  protect,
-  vendorOnly,
-  deleteProduct
-);
+// Delete product
+router.delete("/:id", protect, vendorOnly, deleteProduct);
 
 module.exports = router;

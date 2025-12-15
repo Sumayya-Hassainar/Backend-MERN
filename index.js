@@ -7,6 +7,8 @@ const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
 const Routes = require("./routes/indexRoutes");
+const path = require("path");
+
 
 dotenv.config();
 
@@ -22,6 +24,7 @@ app.set("trust proxy", 1); // 🔥 REQUIRED for Render / Railway / Netlify calls
 /* ================= MIDDLEWARE ================= */
 app.use(compression());
 app.use(express.json({ limit: "10kb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 /* ================= CORS (DEPLOY SAFE) ================= */
 app.use(cors({
