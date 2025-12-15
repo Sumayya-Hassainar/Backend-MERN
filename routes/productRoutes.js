@@ -15,7 +15,7 @@ const {
 router.post("/", protect, vendorOnly, uploadProductImages, createProduct);
 
 // Get my products (vendor)
-router.get("/my/products", protect, getMyProducts);
+router.get("/vendor/my-products", protect, getMyProducts);
 
 // Get all products
 router.get("/", getProducts);
