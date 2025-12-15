@@ -13,39 +13,40 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 
-// ---------------- DATABASE ----------------
-connectDB(); // no async IIFE nonsense
+/* ================= DATABASE ================= */
+connectDB();
 
-// ---------------- MIDDLEWARE ----------------
-app.use(compression()); // 🔥 HUGE SPEED BOOST
+/* ================= TRUST PROXY (IMPORTANT FOR DEPLOY) ================= */
+app.set("trust proxy", 1); // 🔥 REQUIRED for Render / Railway / Netlify calls
+
+/* ================= MIDDLEWARE ================= */
+app.use(compression());
 app.use(express.json({ limit: "10kb" }));
 
+/* ================= CORS (DEPLOY SAFE) ================= */
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "https://silly-cascaron-014ccd.netlify.app"
-  ],
+  origin: true, // 🔥 allow deployed frontend dynamically
   credentials: true,
 }));
 
-// ---------------- RATE LIMIT ----------------
-app.use("/api", rateLimit({
+/* ================= RATE LIMIT ================= */
+const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
-}));
-
-// ---------------- SOCKET.IO ----------------
-const io = new Server(server, {
-  cors: {
-    origin: [
-      "http://localhost:5173",
-      "https://silly-cascaron-014ccd.netlify.app"
-    ],
-    credentials: true,
-  }
+  standardHeaders: true,
+  legacyHeaders: false,
 });
 
-// ⚠️ DO NOT inject io into req globally
+app.use("/api", apiLimiter);
+
+/* ================= SOCKET.IO ================= */
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true,
+  },
+});
+
 app.set("io", io);
 
 io.on("connection", (socket) => {
@@ -60,26 +61,35 @@ io.on("connection", (socket) => {
   });
 });
 
-// ---------------- HEALTH ----------------
-app.get("/", (_, res) => res.send("API running"));
+/* ================= HEALTH ================= */
+app.get("/", (req, res) => {
+  res.status(200).send("API running");
+});
 
-// ---------------- ROUTES ----------------
+/* ================= ROUTES ================= */
 app.use("/api", Routes);
 
-// ---------------- ERRORS ----------------
-app.use((req, res) =>
-  res.status(404).json({ message: "Route not found" })
-);
+/* ================= 404 ================= */
+app.use((req, res) => {
+  res.status(404).json({ message: "Route not found" });
+});
 
+/* ================= ERROR HANDLER ================= */
 app.use((err, req, res, next) => {
-  console.error(err);
+  console.error("🔥 ERROR:", err);
   res.status(err.status || 500).json({
     message: err.message || "Server error",
   });
 });
 
-// ---------------- START ----------------
+/* ================= START ================= */
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () =>
-  console.log(`🚀 Server running on ${PORT}`)
-);
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
+/* ================= PROCESS SAFETY ================= */
+process.on("unhandledRejection", (err) => {
+  console.error("UNHANDLED REJECTION:", err);
+  process.exit(1);
+});
