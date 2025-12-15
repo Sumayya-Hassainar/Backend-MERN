@@ -155,9 +155,16 @@ const rejectVendor = async (req, res) => {
 };
 /* ================= GET ALL USERS ================= */
 const getAllUsers = async (req, res) => {
+  const page = Number(req.query.page) || 1;
+  const limit = 20;
+  const skip = (page - 1) * limit;
+
   const users = await User.find()
-    .select("-password -otp -otpExpiry")
-    .sort({ createdAt: -1 });
+    .select("name email role createdAt") // whitelist > blacklist
+    .sort("-createdAt")
+    .skip(skip)
+    .limit(limit)
+    .lean();
 
   res.json(users);
 };

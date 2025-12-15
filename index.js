@@ -1,29 +1,25 @@
-// server.js
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const http = require("http");
+const compression = require("compression");
+const rateLimit = require("express-rate-limit");
 const { Server } = require("socket.io");
 const connectDB = require("./config/db");
 const Routes = require("./routes/indexRoutes");
 
 dotenv.config();
+
 const app = express();
 const server = http.createServer(app);
 
-// ------------------ DATABASE ------------------
-(async () => {
-  try {
-    await connectDB();
-    console.log("✅ Database connected");
-  } catch (err) {
-    console.error("❌ Database connection failed:", err.message || err);
-    process.exit(1);
-  }
-})();
+// ---------------- DATABASE ----------------
+connectDB(); // no async IIFE nonsense
 
-// ------------------ MIDDLEWARE ------------------
-app.use(express.json());
+// ---------------- MIDDLEWARE ----------------
+app.use(compression()); // 🔥 HUGE SPEED BOOST
+app.use(express.json({ limit: "10kb" }));
+
 app.use(cors({
   origin: [
     "http://localhost:5173",
@@ -32,55 +28,58 @@ app.use(cors({
   credentials: true,
 }));
 
-// ------------------ SOCKET.IO ------------------
+// ---------------- RATE LIMIT ----------------
+app.use("/api", rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+}));
+
+// ---------------- SOCKET.IO ----------------
 const io = new Server(server, {
   cors: {
     origin: [
       "http://localhost:5173",
       "https://silly-cascaron-014ccd.netlify.app"
     ],
-    methods: ["GET","POST"],
     credentials: true,
   }
 });
 
-// Make io accessible in routes/controllers
-app.use((req, res, next) => {
-  req.io = io;
-  next();
-});
+// ⚠️ DO NOT inject io into req globally
+app.set("io", io);
 
 io.on("connection", (socket) => {
-  console.log("⚡ Client connected:", socket.id);
+  console.log("⚡ Socket connected:", socket.id);
 
-  // Join a chat room
   socket.on("joinChat", (chatId) => {
-    if (chatId) {
-      socket.join(chatId);
-      console.log(`⚡ Socket ${socket.id} joined chat ${chatId}`);
-    }
+    if (chatId) socket.join(chatId);
   });
 
   socket.on("disconnect", () => {
-    console.log("⚡ Client disconnected:", socket.id);
+    console.log("❌ Socket disconnected:", socket.id);
   });
 });
 
-// ------------------ HEALTH CHECK ------------------
-app.get("/", (req, res) => res.send("Welcome to backend app"));
+// ---------------- HEALTH ----------------
+app.get("/", (_, res) => res.send("API running"));
 
-// ------------------ API ROUTES ------------------
+// ---------------- ROUTES ----------------
 app.use("/api", Routes);
 
-// ------------------ 404 HANDLER ------------------
-app.use((req, res) => res.status(404).json({ message: "Route not found" }));
+// ---------------- ERRORS ----------------
+app.use((req, res) =>
+  res.status(404).json({ message: "Route not found" })
+);
 
-// ------------------ GLOBAL ERROR HANDLER ------------------
 app.use((err, req, res, next) => {
-  console.error("🔥 SERVER ERROR:", err);
-  res.status(err.status || 500).json({ message: err.message || "Server error" });
+  console.error(err);
+  res.status(err.status || 500).json({
+    message: err.message || "Server error",
+  });
 });
 
-// ------------------ START SERVER ------------------
+// ---------------- START ----------------
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, () =>
+  console.log(`🚀 Server running on ${PORT}`)
+);
