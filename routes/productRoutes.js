@@ -1,56 +1,57 @@
 const express = require("express");
 const router = express.Router();
-
+const { protect, vendorOnly } = require("../middleware/authMiddleware");
 const {
   createProduct,
+  updateProduct,
   getProducts,
   getProductById,
   getMyProducts,
-  updateProduct,
   deleteProduct,
 } = require("../controllers/productController");
 
-const upload = require("../middleware/uploadMiddleware"); // cloudinary multer
-const { protect, vendorOnly } = require("../middleware/authMiddleware");
+// ---------------- Multer Setup ----------------
+const multer = require("multer");
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/"); // make sure 'uploads/' folder exists
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + "-" + file.originalname);
+  },
+});
+const upload = multer({ storage });
 
+// ---------------- Product Routes ----------------
 
-// ---------------- PUBLIC ROUTES ----------------
-router.get("/", getProducts);         // GET /api/products
-
-
-
-// ❗ IMPORTANT: place vendor route BEFORE /:id
-router.get("/vendor/my-products", protect, vendorOnly, getMyProducts);
-
-
-
-// ---------------- VENDOR ROUTES ----------------
+// Create product (vendor only)
 router.post(
   "/",
   protect,
   vendorOnly,
-  upload,          // cloudinary uploader
+  upload.array("images", 5), // 'images' = field name in form, max 5 files
   createProduct
 );
 
+// Update product
 router.put(
   "/:id",
   protect,
   vendorOnly,
-  upload,
+  upload.array("images", 5),
   updateProduct
 );
 
-router.delete(
-  "/:id",
-  protect,
-  vendorOnly,
-  deleteProduct
-);
+// Get all products
+router.get("/", getProducts);
 
+// Get product by ID
+router.get("/:id", getProductById);
 
+// Get my products
+router.get("/my/products", protect, getMyProducts);
 
-// ---------------- PRODUCT DETAILS ----------------
-router.get("/:id", getProductById); // GET /api/products/123
+// Delete product
+router.delete("/:id", protect, vendorOnly, deleteProduct);
 
 module.exports = router;

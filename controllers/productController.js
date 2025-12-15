@@ -1,41 +1,19 @@
 const Product = require("../models/Product");
-const cloudinary = require("cloudinary").v2;
-const fs = require("fs");
 const asyncHandler = require("express-async-handler");
+const uploadToCloudinary = require("../utils/imageUpload"); // your helper
 
-// Configure Cloudinary
-cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
-});
-
-// ---------- CREATE PRODUCT ----------
+// ------------------ CREATE PRODUCT ------------------
 const createProduct = asyncHandler(async (req, res) => {
   try {
-    const {
-      name,
-      description,
-      category,
-      price,
-      discountPrice,
-      stock,
-      isActive,
-    } = req.body;
-
+    const { name, description, category, price, discountPrice, stock, isActive } = req.body;
     const vendor = req.user._id;
 
-    // Upload images to Cloudinary
+    // Upload images using helper
     const images = [];
-    if (req.files && req.files.length > 0) {
+    if (req.files?.length > 0) {
       for (const file of req.files) {
-        const result = await cloudinary.uploader.upload(file.path, {
-          folder: "products",
-        });
-        images.push(result.secure_url);
-
-        // Remove file from local storage after upload
-        fs.unlinkSync(file.path);
+        const url = await uploadToCloudinary(file.path);
+        images.push(url);
       }
     }
 
@@ -58,7 +36,7 @@ const createProduct = asyncHandler(async (req, res) => {
   }
 });
 
-// ---------- GET ALL PRODUCTS ----------
+// ------------------ GET ALL PRODUCTS ------------------
 const getProducts = asyncHandler(async (req, res) => {
   try {
     const products = await Product.find({ isActive: true })
@@ -72,7 +50,7 @@ const getProducts = asyncHandler(async (req, res) => {
   }
 });
 
-// ---------- GET PRODUCT BY ID ----------
+// ------------------ GET PRODUCT BY ID ------------------
 const getProductById = asyncHandler(async (req, res) => {
   try {
     const product = await Product.findById(req.params.id)
@@ -88,14 +66,12 @@ const getProductById = asyncHandler(async (req, res) => {
   }
 });
 
-// ---------- GET MY PRODUCTS ----------
+// ------------------ GET MY PRODUCTS ------------------
 const getMyProducts = asyncHandler(async (req, res) => {
   try {
     const vendorId = req.user._id;
-    const { category } = req.query;
-
     const filter = { vendor: vendorId };
-    if (category) filter.category = category;
+    if (req.query.category) filter.category = req.query.category;
 
     const products = await Product.find(filter)
       .populate("category", "name")
@@ -108,11 +84,10 @@ const getMyProducts = asyncHandler(async (req, res) => {
   }
 });
 
-// ---------- UPDATE PRODUCT ----------
+// ------------------ UPDATE PRODUCT ------------------
 const updateProduct = asyncHandler(async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
-
     if (!product) return res.status(404).json({ message: "Product not found" });
 
     if (String(product.vendor) !== String(req.user._id))
@@ -120,36 +95,27 @@ const updateProduct = asyncHandler(async (req, res) => {
 
     const updateData = { ...req.body, updatedAt: new Date() };
 
-    // Upload new images if provided
-    if (req.files && req.files.length > 0) {
+    if (req.files?.length > 0) {
       const newImages = [];
       for (const file of req.files) {
-        const result = await cloudinary.uploader.upload(file.path, {
-          folder: "products",
-        });
-        newImages.push(result.secure_url);
-        fs.unlinkSync(file.path);
+        const url = await uploadToCloudinary(file.path);
+        newImages.push(url);
       }
-      // Replace old images with new ones
-      updateData.images = newImages;
+      updateData.images = newImages; // replace old images
     }
 
-    const updated = await Product.findByIdAndUpdate(req.params.id, updateData, {
-      new: true,
-    });
-
-    res.status(200).json(updated);
+    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
+    res.status(200).json(updatedProduct);
   } catch (error) {
     console.error("Update product error:", error);
     res.status(400).json({ message: error.message });
   }
 });
 
-// ---------- DELETE PRODUCT ----------
+// ------------------ DELETE PRODUCT ------------------
 const deleteProduct = asyncHandler(async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
-
     if (!product) return res.status(404).json({ message: "Product not found" });
 
     if (String(product.vendor) !== String(req.user._id))
