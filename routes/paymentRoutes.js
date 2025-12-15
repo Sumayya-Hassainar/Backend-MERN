@@ -1,21 +1,24 @@
 const express = require("express");
-const { protect, adminOnly } = require("../middleware/authMiddleware");
+const { protect } = require("../middleware/authMiddleware");
 const {
   createPayment,
   createStripeSession,
+  stripeWebhook,
   getPayments,
 } = require("../controllers/paymentContoller");
 
 const router = express.Router();
 
-/* ================= CREATE PAYMENT ================= */
-// COD or online payment (Card/UPI)
+// COD / manual payment
 router.post("/", protect, createPayment);
 
-/* ================= STRIPE CHECKOUT SESSION ================= */
+// Stripe create session
 router.post("/stripe/create-session", protect, createStripeSession);
 
-/* ================= ADMIN GET ALL PAYMENTS ================= */
-router.get("/", protect, adminOnly, getPayments);
+// ⚠️ Stripe webhook — raw body required, no protect
+router.post("/stripe/webhook", express.raw({ type: "application/json" }), stripeWebhook);
+
+// Admin: get all payments
+router.get("/", protect, getPayments);
 
 module.exports = router;
