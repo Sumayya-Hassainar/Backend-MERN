@@ -1,25 +1,21 @@
-// routes/paymentRoutes.js
 const express = require("express");
-const {
-  createCheckoutSession,
-  getSessionStatus,
-  getPayments,
-  createPayment,     // 👈 add
-} = require("../controllers/paymentContoller");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
+const {
+  createPayment,
+  createStripeSession,
+  getPayments,
+} = require("../controllers/paymentContoller");
 
 const router = express.Router();
 
-// ✅ Simple / local payment record (COD or simulated)
-router.post("/", protect, createPayment);  // 👈 this matches POST /api/payments
+/* ================= CREATE PAYMENT ================= */
+// COD or online payment (Card/UPI)
+router.post("/", protect, createPayment);
 
-// ✅ Create Stripe Checkout Session
-router.post("/create-checkout-session", protect, createCheckoutSession);
+/* ================= STRIPE CHECKOUT SESSION ================= */
+router.post("/stripe/create-session", protect, createStripeSession);
 
-// ✅ Check Stripe session status
-router.get("/session-status", protect, getSessionStatus);
-
-// ✅ Get all payments (admin only)
+/* ================= ADMIN GET ALL PAYMENTS ================= */
 router.get("/", protect, adminOnly, getPayments);
 
 module.exports = router;

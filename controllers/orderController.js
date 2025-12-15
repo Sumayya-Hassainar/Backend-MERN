@@ -5,18 +5,31 @@ const User = require("../models/User");
 /* ================= CREATE ORDER ================= */
 const createOrder = async (req, res) => {
   try {
+    const { products, shippingAddress, totalAmount, paymentMethod } = req.body;
+
+    if (!products?.length) {
+      return res.status(400).json({ message: "No products in order" });
+    }
+
     const order = await Order.create({
-      ...req.body,
-      customer: req.user._id,
-      orderStatus: "Processing",
+      user: req.user._id,
+      products,
+      shippingAddress,
+      totalAmount,
+      paymentMethod,
+      paymentStatus: paymentMethod === "cod" ? "Pending" : "Initiated",
     });
 
-    res.status(201).json({ success: true, order });
-  } catch (error) {
-    console.error("Order creation error:", error);
-    res.status(500).json({ message: error.message });
+    // 🔑 CONTRACT IS CLEAR
+    res.status(201).json({
+      success: true,
+      order, // frontend MUST read order._id
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
   }
 };
+
 
 /* ================= GET MY ORDERS (Customer) ================= */
 const getMyOrders = async (req, res) => {
