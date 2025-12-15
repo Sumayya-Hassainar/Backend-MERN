@@ -1,48 +1,51 @@
+// routes/productRoutes.js
 const express = require("express");
 const router = express.Router();
-const { protect, vendorOnly } = require("../middleware/authMiddleware");
+
 const {
   createProduct,
-  updateProduct,
   getProducts,
   getProductById,
   getMyProducts,
+  updateProduct,
   deleteProduct,
 } = require("../controllers/productController");
 
-// ✅ Use Cloudinary upload middleware
-const upload = require("../middleware/uploadMiddleware"); // Multer–Cloudinary setup
+const uploadProductImages = require("../middleware/uploadMiddleware");
+const { protect, vendorOnly } = require("../middleware/authMiddleware");
 
-// ---------------- ROUTES ----------------
+// ---------- PUBLIC CUSTOMER ROUTES ----------
+router.get("/", getProducts);       // GET /api/products
+router.get("/:id", getProductById);  // GET /api/products/:id
 
-// CREATE PRODUCT (vendor only)
+// ---------- VENDOR-ONLY ROUTES ----------
+// GET /api/products/vendor/my-products?category=...
+router.get("/vendor/my-products", protect, vendorOnly, getMyProducts);
+
+// CREATE product (with multiple images) – only vendor
 router.post(
   "/",
   protect,
   vendorOnly,
-  upload.array("images", 5), // Cloudinary handles the upload
+  uploadProductImages,
   createProduct
 );
 
-// GET MY PRODUCTS (MUST come before :id)
-router.get("/my/products", protect, getMyProducts);
-
-// GET ALL PRODUCTS (public)
-router.get("/", getProducts);
-
-// GET PRODUCT BY ID
-router.get("/:id", getProductById);
-
-// UPDATE PRODUCT
+// UPDATE product
 router.put(
   "/:id",
   protect,
   vendorOnly,
-  upload.array("images", 4), // Multer–Cloudinary handles new images
+  uploadProductImages,
   updateProduct
 );
 
-// DELETE PRODUCT
-router.delete("/:id", protect, vendorOnly, deleteProduct);
+// DELETE product
+router.delete(
+  "/:id",
+  protect,
+  vendorOnly,
+  deleteProduct
+);
 
 module.exports = router;
