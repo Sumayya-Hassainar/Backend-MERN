@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 const orderSchema = new mongoose.Schema(
   {
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
 
     vendor: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // optional now
 
