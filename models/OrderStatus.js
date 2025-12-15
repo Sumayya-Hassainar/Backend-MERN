@@ -1,21 +1,45 @@
-/**
- * Run this script once to fix MongoDB duplicate key errors for OrderStatus.
- * Usage: node cleanOrderStatus.js
- */
-
-require("dotenv").config();
 const mongoose = require("mongoose");
 
-const MONGO_URI = process.env.MONGO_URI; // Ensure this is correct in your .env
+const OrderStatusSchema = new mongoose.Schema(
+  {
+    order: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Order",
+      required: true,
+      index: true,
+    },
 
-const orderStatusSchema = new mongoose.Schema({
-  order: { type: mongoose.Schema.Types.ObjectId, ref: "Order",  },
-  status: { type: String, },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User",  },
-  role: { type: String, enum: ["vendor", "admin"]},
-}, { timestamps: true });
+    status: {
+      type: String,
+      required: true,
+      trim: true,
+    },
 
-// Compound unique index: one status per order
-orderStatusSchema.index({ order: 1, status: 1 }, { unique: true });
-module.exports = mongoose.model("OrderStatus", orderStatusSchema);
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
 
+    role: {
+      type: String,
+      enum: ["vendor", "admin"],
+      required: true,
+    },
+  },
+  { timestamps: true }
+);
+
+/**
+ * ✅ UNIQUE STATUS PER ORDER
+ * Example:
+ * Order A → "Placed" (once)
+ * Order A → "Shipped" (once)
+ * Order A → "Shipped" (blocked ❌)
+ */
+OrderStatusSchema.index(
+  { order: 1, status: 1 },
+  { unique: true }
+);
+
+module.exports = mongoose.model("OrderStatus", OrderStatusSchema);

@@ -1,92 +1,54 @@
-const Chat = require("../models/Chat");
-const Message = require("../models/Message");
 const { HfInference } = require("@huggingface/inference");
 
-// Initialize HuggingFace
-const hf = new HfInference(process.env.HF_API_KEY);
-const AI_MODEL = "EleutherAI/gpt-neo-125M";
+const hfClient = process.env.HF_API_KEY
+  ? new HfInference(process.env.HF_API_KEY)
+  : null;
 
-// -------------------- GET CHATS --------------------
-exports.getChats = async (req, res) => {
+// A lightweight text model (most reliable)
+const MODEL = "mistralai/Mistral-7B-Instruct-v0.2";
+
+exports.chatWithAI = async (req, res) => {
   try {
-    const chats = await Chat.find({ user: req.user._id })
-      .populate("messages")
-      .sort({ updatedAt: -1 });
+    const { message } = req.body;
 
-    res.json(chats);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to load chats" });
-  }
-};
-
-// -------------------- CREATE CHAT --------------------
-exports.createChat = async (req, res) => {
-  try {
-    const { orderId } = req.body;
-
-    const chat = await Chat.create({
-      user: req.user._id,
-      orderId,
-    });
-
-    res.json(chat);
-  } catch (err) {
-    res.status(500).json({ message: "Failed to create chat" });
-  }
-};
-
-// -------------------- SEND MESSAGE + AI --------------------
-exports.sendMessageWithAI = async (req, res) => {
-  try {
-    const { chatId } = req.params;
-    const { content } = req.body;
-
-    if (!content) {
-      return res.status(400).json({ message: "Message content is required" });
+    if (!message || !message.trim()) {
+      return res.status(400).json({ message: "Message is required" });
     }
 
-    // Save user message
-    const userMsg = await Message.create({
-      chatId,
-      sender: req.user._id,
-      content,
-      type: "user"
-    });
-
-    // Call HuggingFace
-    let aiResponse = { generated_text: "AI not available" };
-
-    try {
-      aiResponse = await hf.textGeneration({
-        model: AI_MODEL,
-        inputs: content,
-        max_new_tokens: 150,
+    // ---------- FALLBACK MODE ----------
+    if (!hfClient) {
+      return res.json({
+        reply: "AI (demo mode): Live AI is unavailable, but your system is working correctly.",
+        source: "fallback",
       });
-    } catch (err) {
-      console.warn("AI ERROR:", err.message);
     }
 
-    const aiText = Array.isArray(aiResponse)
-      ? aiResponse[0]?.generated_text
-      : aiResponse?.generated_text;
-
-    // Save AI message
-    const aiMsg = await Message.create({
-      chatId,
-      sender: null, // system
-      content: aiText || "I'm here to help!",
-      type: "ai"
+    // ---------- HUGGINGFACE ----------
+    const response = await hfClient.textGeneration({
+      model: MODEL,
+      inputs: message,
+      parameters: {
+        max_new_tokens: 150,
+        temperature: 0.7,
+      },
     });
 
-    // Update Chat time
-    await Chat.findByIdAndUpdate(chatId, { updatedAt: Date.now() });
+    const reply =
+      response.generated_text ||
+      "AI (fallback): Unable to generate response.";
 
-    res.json({
-      userMessage: userMsg,
-      aiMessage: aiMsg
+    return res.json({
+      reply,
+      source: "huggingface",
     });
 
   } catch (err) {
-    res.status(500).json({ message: "Failed to send message" });
+    console.error("🔥 AI ERROR:", err.message);
+
+    // ---------- SAFE FALLBACK ----------
+    return res.json({
+      reply: "AI (demo mode): Sorry, live AI is unavailable. This is a fallback response.",
+      source: "fallback",
+    });
   }
 };

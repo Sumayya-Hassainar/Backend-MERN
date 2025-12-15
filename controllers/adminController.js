@@ -153,6 +153,67 @@ const rejectVendor = async (req, res) => {
     res.status(500).json({ message: "Failed to reject vendor" });
   }
 };
+/* ================= GET ALL USERS ================= */
+const getAllUsers = async (req, res) => {
+  const users = await User.find()
+    .select("-password -otp -otpExpiry")
+    .sort({ createdAt: -1 });
+
+  res.json(users);
+};
+
+/* ================= BLOCK / UNBLOCK USER ================= */
+const updateUserStatus = async (req, res) => {
+  const { userId } = req.params;
+  const { isBlocked } = req.body;
+
+  if (typeof isBlocked !== "boolean") {
+    return res.status(400).json({ message: "isBlocked must be boolean" });
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  user.isBlocked = isBlocked;
+  await user.save();
+
+  res.json({
+    message: `User ${isBlocked ? "blocked" : "unblocked"} successfully`,
+    userId: user._id,
+    isBlocked: user.isBlocked,
+  });
+};
+
+/* ================= CHANGE USER ROLE ================= */
+const updateUserRole = async (req, res) => {
+  const { userId } = req.params;
+  const { role } = req.body;
+
+  if (!["customer", "vendor"].includes(role)) {
+    return res.status(400).json({ message: "Invalid role" });
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  // Prevent admin downgrade/upgrade mistakes
+  if (user.role === "admin") {
+    return res.status(403).json({ message: "Cannot modify admin role" });
+  }
+
+  user.role = role;
+  await user.save();
+
+  res.json({
+    message: "User role updated",
+    userId: user._id,
+    role: user.role,
+  });
+};
 
 module.exports = {
   registerAdmin,
@@ -163,4 +224,7 @@ module.exports = {
   getPendingVendors,   // ✅ added
   approveVendor,
   rejectVendor,
+  getAllUsers,
+  updateUserStatus,
+  updateUserRole,
 };

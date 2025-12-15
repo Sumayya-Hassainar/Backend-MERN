@@ -6,6 +6,9 @@ const {
   loginAdmin,
   getDashboard,
   getAllUsersAndVendors,
+ getAllUsers,
+ updateUserStatus,
+  updateUserRole,
 } = require("../controllers/adminController");
 
 const {
@@ -39,5 +42,19 @@ router.delete("/vendors/:id", deleteVendor);    // ✅ FIXED
 router.get("/vendors/pending", getPendingVendors);
 router.patch("/vendors/:id/approve", approveVendor);
 router.patch("/vendors/:id/reject", rejectVendor);
+router.get("/users", protect, adminOnly, getAllUsers);
+router.patch(
+  "/users/:userId/status",
+  protect,
+  adminOnly,
+  updateUserStatus
+);
+
+router.patch(
+  "/users/:userId/role",
+  protect,
+  adminOnly,
+  updateUserRole
+);
 
 module.exports = router;

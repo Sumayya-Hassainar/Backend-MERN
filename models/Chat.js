@@ -1,18 +1,12 @@
 const mongoose = require("mongoose");
 
-const MessageSchema = new mongoose.Schema({
-  sender: { type: String, enum: ["customer", "support"], required: true },
+const messageSchema = new mongoose.Schema({
+  role: { type: String, enum: ["user", "assistant"], required: true },
   content: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now },
-});
+}, { timestamps: true });
 
-const ChatSchema = new mongoose.Schema(
-  {
-    user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-    order: { type: mongoose.Schema.Types.ObjectId, ref: "Order", required: true },
-    messages: [MessageSchema],
-  },
-  { timestamps: true }
-);
+const chatSchema = new mongoose.Schema({
+  messages: [messageSchema],
+}, { timestamps: true });
 
-module.exports = mongoose.model("Chat", ChatSchema);
+module.exports = mongoose.model("Chat", chatSchema);
