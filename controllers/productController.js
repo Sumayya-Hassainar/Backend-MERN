@@ -1,132 +1,126 @@
 const Product = require("../models/Product");
 const asyncHandler = require("express-async-handler");
-const uploadToCloudinary = require("../utils/imageUpload"); // your helper
 
-// ------------------ CREATE PRODUCT ------------------
 const createProduct = asyncHandler(async (req, res) => {
-  try {
-    const { name, description, category, price, discountPrice, stock, isActive } = req.body;
-    const vendor = req.user._id;
+  const {
+    name,
+    description,
+    category,
+    price,
+    discountPrice,
+    stock,
+    isActive,
+  } = req.body;
 
-    // Upload images using helper
-    const images = [];
-    if (req.files?.length > 0) {
-      for (const file of req.files) {
-        const url = await uploadToCloudinary(file.path);
-        images.push(url);
-      }
-    }
-
-    const product = await Product.create({
-      vendor,
-      name,
-      description,
-      category,
-      price,
-      discountPrice,
-      stock,
-      isActive,
-      images,
-    });
-
-    res.status(201).json(product);
-  } catch (error) {
-    console.error("Create product error:", error);
-    res.status(400).json({ message: error.message });
+  if (!name || !price || !category) {
+    return res.status(400).json({ message: "Required fields missing" });
   }
+
+  // Cloudinary URLs are already here
+  const images = req.files?.map((file) => file.path) || [];
+
+  const product = await Product.create({
+    vendor: req.user._id,
+    name,
+    description,
+    category,
+    price,
+    discountPrice,
+    stock,
+    isActive,
+    images,
+  });
+
+  res.status(201).json(product);
 });
+
 
 // ------------------ GET ALL PRODUCTS ------------------
 const getProducts = asyncHandler(async (req, res) => {
-  try {
-    const products = await Product.find({ isActive: true })
-      .populate("category", "name")
-      .populate("vendor", "name");
+  const products = await Product.find({ isActive: true })
+    .populate("category", "name")
+    .populate("vendor", "name");
 
-    res.status(200).json(products);
-  } catch (error) {
-    console.error("Get products error:", error);
-    res.status(500).json({ message: error.message });
-  }
+  res.status(200).json(products);
 });
 
 // ------------------ GET PRODUCT BY ID ------------------
 const getProductById = asyncHandler(async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id)
-      .populate("category", "name")
-      .populate("vendor", "name");
+  const product = await Product.findById(req.params.id)
+    .populate("category", "name")
+    .populate("vendor", "name");
 
-    if (!product) return res.status(404).json({ message: "Product not found" });
-
-    res.status(200).json(product);
-  } catch (error) {
-    console.error("Get product by ID error:", error);
-    res.status(400).json({ message: error.message });
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
   }
+
+  res.status(200).json(product);
 });
 
 // ------------------ GET MY PRODUCTS ------------------
 const getMyProducts = asyncHandler(async (req, res) => {
-  try {
-    const vendorId = req.user._id;
-    const filter = { vendor: vendorId };
-    if (req.query.category) filter.category = req.query.category;
+  const filter = { vendor: req.user._id };
+  if (req.query.category) filter.category = req.query.category;
 
-    const products = await Product.find(filter)
-      .populate("category", "name")
-      .sort({ createdAt: -1 });
+  const products = await Product.find(filter)
+    .populate("category", "name")
+    .sort({ createdAt: -1 });
 
-    res.status(200).json(products);
-  } catch (error) {
-    console.error("Get my products error:", error);
-    res.status(400).json({ message: error.message });
-  }
+  res.status(200).json(products);
 });
 
 // ------------------ UPDATE PRODUCT ------------------
 const updateProduct = asyncHandler(async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
+  }
+
+  if (String(product.vendor) !== String(req.user._id)) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  const updateData = { ...req.body };
+  const newImages = [];
+
   try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-
-    if (String(product.vendor) !== String(req.user._id))
-      return res.status(403).json({ message: "Unauthorized" });
-
-    const updateData = { ...req.body, updatedAt: new Date() };
-
-    if (req.files?.length > 0) {
-      const newImages = [];
+    if (req.files && req.files.length > 0) {
       for (const file of req.files) {
         const url = await uploadToCloudinary(file.path);
         newImages.push(url);
+        fs.unlinkSync(file.path);
       }
-      updateData.images = newImages; // replace old images
+
+      updateData.images = newImages;
     }
 
-    const updatedProduct = await Product.findByIdAndUpdate(req.params.id, updateData, { new: true });
-    res.status(200).json(updatedProduct);
+    const updated = await Product.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    );
+
+    res.status(200).json(updated);
   } catch (error) {
-    console.error("Update product error:", error);
-    res.status(400).json({ message: error.message });
+    console.error("Update product failed:", error);
+    res.status(500).json({ message: "Update failed" });
   }
 });
 
 // ------------------ DELETE PRODUCT ------------------
 const deleteProduct = asyncHandler(async (req, res) => {
-  try {
-    const product = await Product.findById(req.params.id);
-    if (!product) return res.status(404).json({ message: "Product not found" });
+  const product = await Product.findById(req.params.id);
 
-    if (String(product.vendor) !== String(req.user._id))
-      return res.status(403).json({ message: "Unauthorized" });
-
-    await product.deleteOne();
-    res.status(200).json({ message: "Product deleted" });
-  } catch (error) {
-    console.error("Delete product error:", error);
-    res.status(400).json({ message: error.message });
+  if (!product) {
+    return res.status(404).json({ message: "Product not found" });
   }
+
+  if (String(product.vendor) !== String(req.user._id)) {
+    return res.status(403).json({ message: "Unauthorized" });
+  }
+
+  await product.deleteOne();
+  res.status(200).json({ message: "Product deleted" });
 });
 
 module.exports = {

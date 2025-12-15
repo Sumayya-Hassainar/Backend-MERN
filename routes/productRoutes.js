@@ -10,48 +10,39 @@ const {
   deleteProduct,
 } = require("../controllers/productController");
 
-// ---------------- Multer Setup ----------------
-const multer = require("multer");
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, "uploads/"); // make sure 'uploads/' folder exists
-  },
-  filename: function (req, file, cb) {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
-});
-const upload = multer({ storage });
+// ✅ Use Cloudinary upload middleware
+const upload = require("../middleware/uploadMiddleware"); // Multer–Cloudinary setup
 
-// ---------------- Product Routes ----------------
+// ---------------- ROUTES ----------------
 
-// Create product (vendor only)
+// CREATE PRODUCT (vendor only)
 router.post(
   "/",
   protect,
   vendorOnly,
-  upload.array("images", 5), // 'images' = field name in form, max 5 files
+  upload.array("images", 5), // Cloudinary handles the upload
   createProduct
 );
 
-// Update product
+// GET MY PRODUCTS (MUST come before :id)
+router.get("/my/products", protect, getMyProducts);
+
+// GET ALL PRODUCTS (public)
+router.get("/", getProducts);
+
+// GET PRODUCT BY ID
+router.get("/:id", getProductById);
+
+// UPDATE PRODUCT
 router.put(
   "/:id",
   protect,
   vendorOnly,
-  upload.array("images", 5),
+  upload.array("images", 4), // Multer–Cloudinary handles new images
   updateProduct
 );
 
-// Get all products
-router.get("/", getProducts);
-
-// Get product by ID
-router.get("/:id", getProductById);
-
-// Get my products
-router.get("/my/products", protect, getMyProducts);
-
-// Delete product
+// DELETE PRODUCT
 router.delete("/:id", protect, vendorOnly, deleteProduct);
 
 module.exports = router;
