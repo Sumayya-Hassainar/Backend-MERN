@@ -112,37 +112,62 @@ const getOrderById = async (req, res) => {
 
 /* ================= ASSIGN ORDER TO VENDOR (Admin) ================= */
 const assignOrderToVendor = async (req, res) => {
+  console.log("🔥 ASSIGN CONTROLLER START");
+
   try {
     const { vendorId } = req.body;
     const { orderId } = req.params;
 
-    if (!vendorId) {
-      return res.status(400).json({ message: "Vendor ID required" });
+    console.log("Received:", { orderId, vendorId });
+
+    // Validate IDs
+    if (!mongoose.Types.ObjectId.isValid(orderId)) {
+      return res.status(400).json({ message: "Invalid orderId" });
+    }
+    if (!mongoose.Types.ObjectId.isValid(vendorId)) {
+      return res.status(400).json({ message: "Invalid vendorId" });
     }
 
+    if (!vendorId) {
+      return res.status(400).json({ message: "Vendor ID is required" });
+    }
+
+    // Update order with vendor
     const updatedOrder = await Order.findByIdAndUpdate(
       orderId,
       { vendor: vendorId },
       { new: true }
-    ).populate("vendor", "name email");
+    ).populate("vendor", "name shopName email");
 
     if (!updatedOrder) {
+      console.log("❌ Order not found for ID:", orderId);
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // 🔥 notify vendor & admin panels
-    req.io.emit("orderVendorAssigned", {
-      orderId: updatedOrder._id.toString(),
-      vendor: updatedOrder.vendor,
+    console.log("✅ ORDER UPDATED:", !!updatedOrder);
+
+    // Emit socket event safely
+    if (req.io) {
+      req.io.emit("orderVendorAssigned", {
+        orderId: updatedOrder._id.toString(),
+        vendor: updatedOrder.vendor,
+      });
+      console.log("📡 SOCKET EMITTED");
+    } else {
+      console.log("⚠️ req.io not found, skipping socket emit");
+    }
+
+    // Send success response
+    return res.status(200).json({
+      success: true,
+      order: updatedOrder,
     });
 
-    res.json({ success: true, order: updatedOrder });
   } catch (err) {
-    console.error("Assign Order Error:", err);
-    res.status(500).json({ message: "Failed to assign vendor" });
+    console.error("❌ ASSIGN ERROR:", err);
+    return res.status(500).json({ message: "Failed to assign vendor" });
   }
 };
-
 /* ================= DELETE ORDER (Admin) ================= */
 const deleteOrder = async (req, res) => {
   try {

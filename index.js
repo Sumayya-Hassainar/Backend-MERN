@@ -1,23 +1,45 @@
+/* ================= ENV ================= */
 const dotenv = require("dotenv");
-dotenv.config(); // must be at the very top
+dotenv.config(); // MUST be first
 
+/* ================= CORE ================= */
 const express = require("express");
 const cors = require("cors");
 const http = require("http");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
 const path = require("path");
+
+/* ================= SOCKET ================= */
+const { Server } = require("socket.io");
+
+/* ================= APP FILES ================= */
 const connectDB = require("./config/db");
 const Routes = require("./routes/indexRoutes");
 
-// Check Stripe key immediately
+/* ================= VALIDATE ENV ================= */
 if (!process.env.STRIPE_SECRET_KEY) {
-  console.error("❌ STRIPE_SECRET_KEY is missing in .env!");
+  console.error("❌ STRIPE_SECRET_KEY missing");
   process.exit(1);
 }
 
+/* ================= APP ================= */
 const app = express();
 const server = http.createServer(app);
+
+/* ================= SOCKET.IO ================= */
+const io = new Server(server, {
+  cors: {
+    origin: true,
+    credentials: true,
+  },
+});
+
+/* 🔥 Make io available in ALL controllers */
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 /* ================= DATABASE ================= */
 connectDB();
@@ -34,6 +56,7 @@ app.use(
   })
 );
 
+/* ================= RATE LIMIT ================= */
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
@@ -42,7 +65,7 @@ const apiLimiter = rateLimit({
 });
 app.use("/api", apiLimiter);
 
-/* ================= HEALTH CHECK ================= */
+/* ================= HEALTH ================= */
 app.get("/", (req, res) => {
   res.status(200).send("API running");
 });
@@ -63,14 +86,26 @@ app.use((err, req, res, next) => {
   });
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
 
 /* ================= PROCESS SAFETY ================= */
+
+/* 🔴 Sync crashes */
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+  process.exit(1);
+});
+
+/* 🔴 Async crashes */
 process.on("unhandledRejection", (err) => {
   console.error("UNHANDLED REJECTION:", err);
-  process.exit(1);
+
+  // fail-fast ONLY in production
+  if (process.env.NODE_ENV === "production") {
+    process.exit(1);
+  }
 });
