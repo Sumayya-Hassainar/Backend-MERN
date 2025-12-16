@@ -5,7 +5,7 @@ const paymentSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
   amount: { type: Number, required: true },
   method: { type: String, required: true, enum: ["cod", "card"] },
-  status: { type: String, required: true },
+  status: { type: String,  },
   transactionId: { 
     type: String, 
     required: function() { return this.method !== "cod"; } // required only for card
