@@ -7,41 +7,33 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const CLIENT_URL = process.env.CLIENT_URL || "http://localhost:5173";
 
 /* ================= COD / MANUAL PAYMENT ================= */
-exports.createPayment = async (req, res) => {
+
+exports. createPayment = async (req, res) => {
   try {
     const { orderId, amount, paymentMethod } = req.body;
 
-    if (!orderId || !amount || !paymentMethod) {
-      return res.status(400).json({ message: "orderId, amount, and paymentMethod required" });
-    }
-    if (paymentMethod !== "cod") {
-      return res.status(400).json({ message: "createPayment only allowed for COD" });
-    }
+    if (!orderId) return res.status(400).json({ message: "orderId is required" });
 
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
-    const payment = await Payment.create({
+    const paymentData = {
       order: order._id,
-      vendor: order.vendor || null,
       user: req.user?._id || null,
-      amount,
-      paymentMethod,
-      paymentStatus: "Pending",
-      transactionId: uuidv4(),
-    });
+      amount: amount || order.totalAmount || 0,
+      method: paymentMethod || "cod",
+      status: "pending",
+      items: order.products || [], // attach items from order
+    };
 
-    // update order paymentStatus
-    order.paymentStatus = "Pending";
-    await order.save();
+    const payment = await Payment.create(paymentData);
 
-    res.status(201).json({ success: true, payment });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: error.message || "Failed to create payment" });
+    res.status(201).json(payment);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: err.message });
   }
 };
-
 /* ================= STRIPE CHECKOUT SESSION ================= */
 exports.createStripeSession = async (req, res) => {
   try {

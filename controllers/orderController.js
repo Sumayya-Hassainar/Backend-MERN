@@ -11,32 +11,41 @@ const createOrder = async (req, res) => {
       return res.status(400).json({ message: "No products in order" });
     }
 
+    // Ensure product IDs are valid
+    const validProducts = products.map((p) => ({
+      product: p.product,
+      quantity: p.quantity,
+      price: p.price,
+    }));
+
     const order = await Order.create({
-      user: req.user._id,
-      products,
+      customer: req.user._id,
+      products: validProducts,
       shippingAddress,
       totalAmount,
       paymentMethod,
-      paymentStatus: paymentMethod === "cod" ? "Pending" : "Initiated",
+      status: "Processing",
     });
 
-    // 🔑 CONTRACT IS CLEAR
-    res.status(201).json({
-      success: true,
-      order, // frontend MUST read order._id
-    });
+    // populate before sending to frontend
+    const populatedOrder = await Order.findById(order._id)
+      .populate("products.product", "name price images")
+      .populate("customer", "name email")
+      .lean();
+
+    res.status(201).json({ success: true, order: populatedOrder });
   } catch (err) {
+    console.error("Create Order Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
-
 
 /* ================= GET MY ORDERS (Customer) ================= */
 const getMyOrders = async (req, res) => {
   try {
     const orders = await Order.find({ customer: req.user._id })
+      .populate("products.product", "name price images")
       .populate("vendor", "name email")
-      .populate("products.product")
       .sort({ createdAt: -1 })
       .lean();
 
@@ -87,8 +96,8 @@ const getOrderById = async (req, res) => {
 
     const order = await Order.findById(req.params.id)
       .populate("customer", "name email")
-      .populate("vendor", "name email")
-      .populate("products.product");
+      .populate("products.product", "name price images")
+      .lean();
 
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
