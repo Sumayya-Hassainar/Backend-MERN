@@ -1,14 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-  createStatus,
-  updateStatus,
-  deleteStatus,
-  getStatuses,
-  getOrderTracking,
-} = require("../controllers/orderStatusController");
-
+const orderStatusController = require("../controllers/orderStatusController");
 const {
   protect,
   vendorOnly,
@@ -16,36 +9,44 @@ const {
   customerOnly,
 } = require("../middleware/authMiddleware");
 
+const {
+  createStatus,
+  updateStatus,
+  deleteStatus,
+  getStatuses,
+  getOrderTracking,
+} = orderStatusController;
+
 /* ================= ROUTES ================= */
 
-// Vendor creates a status
+// Vendor creates status
 router.post("/", protect, vendorOnly, createStatus);
 
-// Vendor OR Admin updates a status
+// Vendor or Admin update status
 router.put("/:statusId", protect, (req, res, next) => {
-  if (req.user.role !== "vendor" && req.user.role !== "admin") {
+  if (!["vendor", "admin"].includes(req.user.role)) {
     return res.status(403).json({ message: "Access denied" });
   }
   next();
 }, updateStatus);
 
-// Vendor OR Admin deletes a status
+// Vendor or Admin delete status
 router.delete("/:statusId", protect, (req, res, next) => {
-  if (req.user.role !== "vendor" && req.user.role !== "admin") {
+  if (!["vendor", "admin"].includes(req.user.role)) {
     return res.status(403).json({ message: "Access denied" });
   }
   next();
 }, deleteStatus);
 
-// Vendor OR Admin view order status timeline
+// Vendor or Admin view order statuses
 router.get("/order/:orderId", protect, (req, res, next) => {
-  if (req.user.role !== "vendor" && req.user.role !== "admin") {
+  if (!["vendor", "admin"].includes(req.user.role)) {
     return res.status(403).json({ message: "Access denied" });
   }
   next();
 }, getStatuses);
 
-// Customer tracking page
+// Customer tracking
 router.get("/track/:orderId", protect, customerOnly, getOrderTracking);
 
 module.exports = router;
