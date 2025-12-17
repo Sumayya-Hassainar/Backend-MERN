@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const User = require("../models/User");
+const Vendor =require("../models/Vendor")
 
 /* ================= CREATE ORDER ================= */
 const createOrder = async (req, res) => {
@@ -75,18 +76,28 @@ const getOrders = async (req, res) => {
 /* ================= GET VENDOR ORDERS ================= */
 const getVendorOrders = async (req, res) => {
   try {
-    const orders = await Order.find({ vendor: req.user._id })
+    // 1️⃣ Find vendor linked to logged-in user
+    const vendor = await Vendor.findOne({ user: req.user._id });
+
+    if (!vendor) {
+      return res.status(404).json({ message: "Vendor not found" });
+    }
+
+    // 2️⃣ Fetch orders ASSIGNED to this vendor
+    const orders = await Order.find({ vendor: vendor._id })
       .populate("customer", "name email")
-      .populate("products.product")
+      .populate("products.product", "name price")
       .sort({ createdAt: -1 });
 
-    res.json({ success: true, orders });
+    res.status(200).json({
+      success: true,
+      orders,
+    });
   } catch (err) {
-    console.error("Get Vendor Orders Error:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("Vendor orders error:", err);
+    res.status(500).json({ message: "Failed to fetch vendor orders" });
   }
 };
-
 /* ================= GET ORDER BY ID ================= */
 const getOrderById = async (req, res) => {
   try {
